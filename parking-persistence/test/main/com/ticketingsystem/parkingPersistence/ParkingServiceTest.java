@@ -1,6 +1,7 @@
 package main.com.ticketingsystem.parkingPersistence;
 
 import main.com.ticketingsystem.parkingEntity.ParkingService;
+import main.com.ticketingsystem.parkingEntity.ParkingServiceImpl;
 import main.com.ticketingsystem.parkingEntity.ParkingSlot;
 import main.com.ticketingsystem.helpers.SlotType;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,7 +17,7 @@ class ParkingServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ParkingService(new InMemoryPersistence());
+        service = new ParkingServiceImpl(new InMemoryPersistence());
     }
 
     @Test
