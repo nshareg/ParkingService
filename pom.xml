@@ -11,8 +11,9 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>parking-entity</module>
-        <module>parking-persistence</module>
+        <module>parking</module>
+        <module>in-memory-persistence</module>
+        <module>app</module>
     </modules>
 
     <properties>
