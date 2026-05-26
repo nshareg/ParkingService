@@ -29,12 +29,17 @@ public class InMemoryPreparedStatement implements PreparedStatement {
     }
     @Override
     public ResultSet executeQuery() throws SQLException{
+
         //if query contains something, f.e. where slot_id, then we just parse the parameters(1,?)
     }
     @Override
     public int executeUpdate() throws SQLException{
         //if query contains something, f.e. where slot_id, then we just parse the parameters(1,?)
     }
+
+
+
+
     @Override
     public void setObject(int index, Object value) throws SQLException {
         parameters.put(index, value);
