@@ -1,4 +1,4 @@
-package main.com.ticketingsystem.parkingPersistence;
+package main.com.parkingsystem.parkingPersistence;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

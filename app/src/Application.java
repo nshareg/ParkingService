@@ -1,11 +1,11 @@
-import main.com.ticketingsystem.contract.ParkingRepository;
-import main.com.ticketingsystem.contract.ParkingService;
-import main.com.ticketingsystem.entity.ParkingSlot;
-import main.com.ticketingsystem.helpers.SlotType;
-import main.com.ticketingsystem.impl.ParkingRepositoryimpl;
-import main.com.ticketingsystem.impl.ParkingServiceImpl;
-import main.com.ticketingsystem.parkingPersistence.InMemoryConnection;
-import main.com.ticketingsystem.parkingPersistence.Index;
+import main.com.parkingsystem.contract.ParkingRepository;
+import main.com.parkingsystem.contract.ParkingService;
+import main.com.parkingsystem.entity.ParkingSlot;
+import main.com.parkingsystem.helpers.SlotType;
+import main.com.parkingsystem.impl.ParkingRepositoryimpl;
+import main.com.parkingsystem.impl.ParkingServiceImpl;
+import main.com.parkingsystem.parkingPersistence.InMemoryConnection;
+import main.com.parkingsystem.parkingPersistence.Index;
 
 import java.sql.Connection;
 import java.sql.SQLException;

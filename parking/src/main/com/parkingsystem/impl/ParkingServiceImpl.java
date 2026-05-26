@@ -1,9 +1,9 @@
-package main.com.ticketingsystem.impl;
+package main.com.parkingsystem.impl;
 
-import main.com.ticketingsystem.contract.ParkingRepository;
-import main.com.ticketingsystem.contract.ParkingService;
-import main.com.ticketingsystem.entity.ParkingSlot;
-import main.com.ticketingsystem.helpers.SlotType;
+import main.com.parkingsystem.contract.ParkingRepository;
+import main.com.parkingsystem.contract.ParkingService;
+import main.com.parkingsystem.entity.ParkingSlot;
+import main.com.parkingsystem.helpers.SlotType;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -36,7 +36,11 @@ public class ParkingServiceImpl implements ParkingService {
 
     @Override
     public Optional<ParkingSlot> park(String numberPlate) throws SQLException {
-        Optional<ParkingSlot> free = repository.findAllFree().stream().findFirst();
+        return park(numberPlate, SlotType.REGULAR);
+    }
+    @Override
+    public Optional<ParkingSlot> park(String numberPlate, SlotType slotType) throws SQLException {
+        Optional<ParkingSlot> free = repository.findAllFree().stream().filter(x -> x.getType().equals(slotType)).findFirst();
         if (free.isEmpty()) return Optional.empty();
         ParkingSlot slot = free.get();
         slot.book(numberPlate);

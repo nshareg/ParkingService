@@ -1,8 +1,8 @@
-package main.com.ticketingsystem.impl;
+package main.com.parkingsystem.impl;
 
-import main.com.ticketingsystem.contract.ParkingRepository;
-import main.com.ticketingsystem.entity.ParkingSlot;
-import main.com.ticketingsystem.helpers.SlotType;
+import main.com.parkingsystem.contract.ParkingRepository;
+import main.com.parkingsystem.entity.ParkingSlot;
+import main.com.parkingsystem.helpers.SlotType;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;

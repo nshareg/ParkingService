@@ -1,6 +1,6 @@
-package main.com.ticketingsystem.parkingPersistence;
+package main.com.parkingsystem.parkingPersistence;
 
-import main.com.ticketingsystem.entity.ParkingSlot;
+import main.com.parkingsystem.entity.ParkingSlot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

@@ -1,7 +1,7 @@
-package main.com.ticketingsystem.entity;
+package main.com.parkingsystem.entity;
 
 import lombok.Getter;
-import main.com.ticketingsystem.helpers.SlotType;
+import main.com.parkingsystem.helpers.SlotType;
 
 import java.util.Objects;
 import java.util.UUID;

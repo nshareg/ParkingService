@@ -1,12 +1,11 @@
-package main.com.ticketingsystem.parkingPersistence;
+package main.com.parkingsystem.parkingPersistence;
 
-import main.com.ticketingsystem.entity.ParkingSlot;
+import main.com.parkingsystem.entity.ParkingSlot;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 
 /*
@@ -29,7 +28,9 @@ public class InMemoryPreparedStatement implements PreparedStatement {
     }
     @Override
     public ResultSet executeQuery() throws SQLException{
-
+        if(query.contains("CREATE TABLE")){
+            Table.createTable();
+        }
         //if query contains something, f.e. where slot_id, then we just parse the parameters(1,?)
     }
     @Override

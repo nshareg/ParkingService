@@ -1,7 +1,7 @@
-package main.com.ticketingsystem.contract;
+package main.com.parkingsystem.contract;
 
-import main.com.ticketingsystem.helpers.SlotType;
-import main.com.ticketingsystem.entity.ParkingSlot;
+import main.com.parkingsystem.helpers.SlotType;
+import main.com.parkingsystem.entity.ParkingSlot;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -19,6 +19,8 @@ public interface ParkingService {
     Optional<ParkingSlot> removeSlot(UUID id) throws SQLException;
 
     Optional<ParkingSlot> park(String numberPlate) throws SQLException;
+
+    Optional<ParkingSlot> park(String numberPlate, SlotType slotType) throws SQLException;
 
     Optional<ParkingSlot> release(String numberPlate) throws SQLException;
 
