@@ -1,7 +1,5 @@
 package main.com.parkingsystem.parkingPersistence;
 
-import main.com.parkingsystem.entity.ParkingSlot;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -12,7 +10,13 @@ import java.util.Map;
 public class Storage {
     private final static Map<String, Table<?>> tableList = new HashMap<>();
 
-    public static <clazz> Table<clazz> createTable(String tableName){
-        return tableList.put(tableName, new Table<clazz>(tableName));
+    public static <T> Table<T> createTable(String tableName) {
+        Table<T> table = new Table<>(tableName);
+        tableList.put(tableName, table);
+        return table;
+    }
+
+    public static <T> Table<T> getTable(String tableName) {
+        return (Table<T>) tableList.get(tableName);
     }
 }

@@ -1,11 +1,8 @@
 package main.com.parkingsystem.parkingPersistence;
 
-import main.com.parkingsystem.entity.ParkingSlot;
-
 import java.sql.*;
 import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.concurrent.Executor;
 
 /*
@@ -13,20 +10,13 @@ import java.util.concurrent.Executor;
     on 25.05.26
 */
 public class InMemoryConnection implements Connection {
-    private final Index<UUID, ParkingSlot> slots;
-    private final Index<String, UUID> plateToIDIndex;
-
     private boolean closed = false;
 
-    public InMemoryConnection(Index<UUID, ParkingSlot> slots,
-                              Index<String, UUID> plateIndex) {
-        this.slots = slots;
-        this.plateToIDIndex = plateIndex;
-    }
+    public InMemoryConnection() {}
 
     @Override
     public PreparedStatement prepareStatement(String sql) throws SQLException {
-        return new InMemoryPreparedStatement(sql, slots, plateToIDIndex);
+        return new InMemoryPreparedStatement(sql);
     }
 
     @Override

@@ -1,11 +1,9 @@
 package main.com.parkingsystem.parkingPersistence;
 
-import main.com.parkingsystem.entity.ParkingSlot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.sql.SQLFeatureNotSupportedException;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -15,9 +13,7 @@ class InMemoryConnectionTest {
 
     @BeforeEach
     void setUp() {
-        Index<UUID, ParkingSlot> slots = Index.createIndex();
-        Index<String, UUID> plateIndex = Index.createIndex();
-        connection = new InMemoryConnection(slots, plateIndex);
+        connection = new InMemoryConnection();
     }
 
     @Test
