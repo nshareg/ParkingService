@@ -9,6 +9,9 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /*
     Created by anshanyan
@@ -16,7 +19,11 @@ import java.util.UUID;
 */
 public class ParkingServiceImpl implements ParkingService {
 
-    ParkingRepository repository;
+    private final ParkingRepository repository;
+
+    private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+    private final Lock readLock = readWriteLock.readLock();
+    private final Lock writeLock = readWriteLock.writeLock();
 
     public ParkingServiceImpl(ParkingRepository repository) {
         this.repository = repository;
@@ -24,77 +31,140 @@ public class ParkingServiceImpl implements ParkingService {
 
     @Override
     public ParkingSlot addSlot(SlotType type) throws SQLException {
-        ParkingSlot slot = new ParkingSlot(type);
-        repository.add(slot);
-        return slot;
+        writeLock.lock();
+        try {
+            ParkingSlot slot = new ParkingSlot(type);
+            repository.add(slot);
+            return slot;
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Override
     public Optional<ParkingSlot> removeSlot(UUID id) throws SQLException {
-        return repository.remove(id);
+        writeLock.lock();
+        try {
+            return repository.remove(id);
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Override
     public Optional<ParkingSlot> park(String numberPlate) throws SQLException {
         return park(numberPlate, SlotType.REGULAR);
     }
+
     @Override
     public Optional<ParkingSlot> park(String numberPlate, SlotType slotType) throws SQLException {
-        Optional<ParkingSlot> free = repository.findAllFree().stream().filter(x -> x.getType().equals(slotType)).findFirst();
-        if (free.isEmpty()) return Optional.empty();
-        ParkingSlot slot = free.get();
-        slot.book(numberPlate);
-        repository.update(slot);
-        return Optional.of(slot);
+        writeLock.lock();
+        try {
+            Optional<ParkingSlot> free = repository.findAllFree().stream()
+                    .filter(x -> x.getType().equals(slotType))
+                    .findFirst();
+            if (free.isEmpty()) return Optional.empty();
+            ParkingSlot slot = free.get();
+            slot.book(numberPlate);
+            repository.update(slot);
+            return Optional.of(slot);
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Override
     public Optional<ParkingSlot> release(String numberPlate) throws SQLException {
-        Optional<ParkingSlot> found = repository.findByNumberPlate(numberPlate);
-        if (found.isEmpty()) return Optional.empty();
-        ParkingSlot slot = found.get();
-        slot.release();
-        repository.update(slot);
-        return Optional.of(slot);
+        writeLock.lock();
+        try {
+            Optional<ParkingSlot> found = repository.findByNumberPlate(numberPlate);
+            if (found.isEmpty()) return Optional.empty();
+            ParkingSlot slot = found.get();
+            slot.release();
+            repository.update(slot);
+            return Optional.of(slot);
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Override
     public List<ParkingSlot> findAll() throws SQLException {
-        return repository.findAll();
+        readLock.lock();
+        try {
+            return repository.findAll();
+        } finally {
+            readLock.unlock();
+        }
     }
 
     @Override
     public List<ParkingSlot> findAllFree() throws SQLException {
-        return repository.findAllFree();
+        readLock.lock();
+        try {
+            return repository.findAllFree();
+        } finally {
+            readLock.unlock();
+        }
     }
 
     @Override
     public List<ParkingSlot> findAllBooked() throws SQLException {
-        return repository.findAllBooked();
+        readLock.lock();
+        try {
+            return repository.findAllBooked();
+        } finally {
+            readLock.unlock();
+        }
     }
 
     @Override
     public List<ParkingSlot> findByType(SlotType type) throws SQLException {
-        return repository.findByType(type);
+        readLock.lock();
+        try {
+            return repository.findByType(type);
+        } finally {
+            readLock.unlock();
+        }
     }
 
     @Override
     public Optional<ParkingSlot> findByNumberPlate(String plate) throws SQLException {
-        return repository.findByNumberPlate(plate);
+        readLock.lock();
+        try {
+            return repository.findByNumberPlate(plate);
+        } finally {
+            readLock.unlock();
+        }
     }
 
     @Override
     public int count() throws SQLException {
-        return repository.count();
+        readLock.lock();
+        try {
+            return repository.count();
+        } finally {
+            readLock.unlock();
+        }
     }
 
     @Override
     public int countFree() throws SQLException {
-        return repository.countFree();
+        readLock.lock();
+        try {
+            return repository.countFree();
+        } finally {
+            readLock.unlock();
+        }
     }
 
     @Override
     public int countBooked() throws SQLException {
-        return repository.countBooked();
+        readLock.lock();
+        try {
+            return repository.countBooked();
+        } finally {
+            readLock.unlock();
+        }
     }
 }

@@ -1,4 +1,4 @@
-package main.com.parkingsystem.parkingPersistence;
+package main.com.inMemoryPersistence;
 
 import java.util.HashMap;
 import java.util.Map;

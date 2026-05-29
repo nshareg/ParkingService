@@ -3,8 +3,8 @@ import main.com.parkingsystem.contract.ParkingService;
 import main.com.parkingsystem.helpers.SlotType;
 import main.com.parkingsystem.impl.ParkingRepositoryimpl;
 import main.com.parkingsystem.impl.ParkingServiceImpl;
-import main.com.parkingsystem.parkingPersistence.InMemoryConnection;
-import main.com.parkingsystem.parkingPersistence.Storage;
+import main.com.inMemoryPersistence.InMemoryConnection;
+import main.com.inMemoryPersistence.Storage;
 
 import java.io.IOException;
 import java.sql.Connection;

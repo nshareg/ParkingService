@@ -1,4 +1,4 @@
-package main.com.parkingsystem.parkingPersistence;
+package main.com.inMemoryPersistence;
 
 import java.io.InputStream;
 import java.io.Reader;
@@ -90,7 +90,7 @@ public class InMemoryPreparedStatement implements PreparedStatement {
 
         if(indexOfWHERE <= 0) throw new SQLException("invalid query passed: " + query);
 
-        String columnsToSet = query.substring(indexOfSET + 4, indexOfWHERE);
+        String columnsToSet = query.substring(indexOfSET + 3, indexOfWHERE);
         String[] columns = columnsToSet.split("\\s*=\\s*\\?,?\\s*");
 
 
@@ -132,10 +132,9 @@ public class InMemoryPreparedStatement implements PreparedStatement {
 
     private String extractTableName(String keyword) throws SQLException {
         String upper = query.toUpperCase();
-        String prefix = keyword.toUpperCase();
-        int start = upper.indexOf(prefix);
+        int start = upper.indexOf(keyword.toUpperCase());
         if (start < 0) throw new SQLException("Cannot find '" + keyword + "' in: " + query);
-        start += prefix.length();
+        start += keyword.length();
         while (start < query.length() && query.charAt(start) == ' ') start++;
         int end = start;
         while (end < query.length() && query.charAt(end) != ' ' && query.charAt(end) != '(') end++;
