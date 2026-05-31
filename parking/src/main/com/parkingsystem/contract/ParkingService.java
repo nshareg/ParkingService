@@ -14,6 +14,8 @@ import java.util.UUID;
 */
 public interface ParkingService {
 
+    void init() throws SQLException;
+
     ParkingSlot addSlot(SlotType type) throws SQLException;
 
     Optional<ParkingSlot> removeSlot(UUID id) throws SQLException;

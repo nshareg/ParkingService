@@ -32,7 +32,38 @@ public class InMemoryPreparedStatement implements PreparedStatement {
         if (upper.startsWith("INSERT")) return executeInsert();
         if (upper.startsWith("UPDATE")) return executeUpdateOp();
         if (upper.startsWith("DELETE")) return executeDelete();
+        if (upper.startsWith("CREATE")) return executeCreate();
+        if (upper.startsWith("ALTER")) return executeAlter();
         throw new SQLException("Unsupported: " + query);
+    }
+
+    private int executeAlter() throws SQLException {
+        Table<Map<String, Object>> table = resolveTable(extractTableName("ALTER TABLE "));
+
+        int open = query.indexOf("(");
+        int close = query.indexOf(")");
+        if (open < 0 || close < 0) {
+            throw new SQLException("expected (column): " + query);
+        }
+        String column = query.substring(open + 1, close).trim();
+
+        Index<Object, Map<String, Object>> index = Index.createIndex(row -> row.get(column));
+
+        for (Map<String, Object> row : table.getWithoutIndex(x -> true)) {
+            index.put(index.extractKey(row), row);
+        }
+
+        table.getIndexList().add(index);
+        return 0;
+    }
+
+    private int executeCreate() throws SQLException {
+        String name = extractTableName("CREATE TABLE ");
+        if (Storage.getTable(name) != null) {
+            throw new SQLException("table '" + name + "' already exists");
+        }
+        Storage.createTable(name);
+        return 0;
     }
 
     private Table<Map<String, Object>> resolveTable(String name) throws SQLException {
@@ -53,7 +84,7 @@ public class InMemoryPreparedStatement implements PreparedStatement {
             row.put(columnNames[i].trim(), parameters.get(i + 1));
         }
 
-        table.getData().add(row);
+        table.add(row);
         return 1;
     }
 
@@ -70,20 +101,19 @@ public class InMemoryPreparedStatement implements PreparedStatement {
             Object value = resolveValue(condition.substring(condition.indexOf("=") + 1).trim(),1);
 
             result = new ArrayList<>();
-            for(Map<String, Object> pair: table.getData()){
+            for(Map<String, Object> pair: table.getWithoutIndex(x -> true)){
                 if(Objects.equals(pair.get(columnName), value)){
                     result.add(pair);
                 }
             }
         } else{// if no where is specified we return the whole table
-            result = new ArrayList<>(table.getData());
+            result = new ArrayList<>(table.getWithoutIndex(x -> true));
         }
         return new InMemoryResultSet(result);
     }
 
-    private int executeUpdateOp() throws SQLException {
+    public int executeUpdateOp() throws SQLException {
         Table<Map<String, Object>> table = resolveTable(extractTableName("UPDATE "));
-        int rowsAffected = 0;
 
         int indexOfSET = query.toUpperCase().indexOf("SET");
         int indexOfWHERE = query.toUpperCase().indexOf("WHERE");
@@ -93,41 +123,28 @@ public class InMemoryPreparedStatement implements PreparedStatement {
         String columnsToSet = query.substring(indexOfSET + 3, indexOfWHERE);
         String[] columns = columnsToSet.split("\\s*=\\s*\\?,?\\s*");
 
-
         String condition = query.substring(indexOfWHERE + 5);
         String columnName = condition.substring(0, condition.indexOf("=")).trim();
         Object value = resolveValue(condition.substring(condition.indexOf("=") + 1).trim(), columns.length + 1);
 
-        for (Map<String, Object> row : table.getData()) {
-            if (Objects.equals(row.get(columnName), value)) {
-                for (int i = 0; i < columns.length; i++) {
-                    row.put(columns[i].trim(), parameters.get(i + 1));
-                }
-                rowsAffected++;
-            }
-        }
-        return rowsAffected;
+        return table.update(
+                row -> Objects.equals(row.get(columnName), value),
+                row -> {
+                    for (int i = 0; i < columns.length; i++) {
+                        row.put(columns[i].trim(), parameters.get(i + 1));
+                    }
+                });
     }
 
     private int executeDelete() throws SQLException {
         Table<Map<String, Object>> table = resolveTable(extractTableName("DELETE FROM "));
-
-        int rowsAffected = 0;
 
         int indexOfWHERE = query.toUpperCase().indexOf("WHERE");
         String condition = query.substring(indexOfWHERE + 6);
         String columnName = condition.substring(0, condition.indexOf("=")).trim();
         Object value = resolveValue(condition.substring(condition.indexOf("=") + 1).trim(),1);
 
-        Iterator<Map<String, Object>> it = table.getData().iterator();
-        while (it.hasNext()) {
-            Map<String, Object> row = it.next();
-            if (Objects.equals(row.get(columnName), value)) {
-                it.remove();
-                rowsAffected++;
-            }
-        }
-        return rowsAffected;
+        return table.remove(x -> Objects.equals(x.get(columnName), value));
     }
 
     private String extractTableName(String keyword) throws SQLException {

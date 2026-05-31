@@ -7,7 +7,7 @@ import java.util.Map;
     Created by anshanyan
     on 26.05.26
 */
-public class Storage {
+final class Storage {//private final
     private final static Map<String, Table<?>> tableList = new HashMap<>();
 
     public static <T> Table<T> createTable(String tableName) {

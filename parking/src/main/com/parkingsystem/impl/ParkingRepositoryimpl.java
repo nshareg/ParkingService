@@ -25,6 +25,21 @@ public class ParkingRepositoryimpl implements ParkingRepository {
     }
 
     @Override
+    public void init() throws SQLException {
+        PreparedStatement createTable = connection.prepareStatement(
+                "CREATE TABLE slots (slot_id, type, booked, number_plate)");
+        createTable.executeUpdate();
+
+        PreparedStatement indexBySlotId = connection.prepareStatement(
+                "ALTER TABLE slots ADD INDEX (slot_id)");
+        indexBySlotId.executeUpdate();
+
+        PreparedStatement indexByNumberPlate = connection.prepareStatement(
+                "ALTER TABLE slots ADD INDEX (number_plate)");
+        indexByNumberPlate.executeUpdate();
+    }
+
+    @Override
     public void add(ParkingSlot parkingSlot) throws SQLException {
         PreparedStatement ps = connection.prepareStatement(
                 "INSERT INTO slots (slot_id, type, booked, number_plate) VALUES (?, ?, ?, ?)");

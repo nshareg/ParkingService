@@ -4,17 +4,21 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /*
     Created by anshanyan
     on 24.05.26
  */
-/**
-   Custom version for hashmap
-   As custom functionality will be implemented, I made a decision in favor of the unique key's as parking ID, so O(1) will be guaranteed
- */
-public class Index<K,V> extends HashMap<K,V> {
+
+final class Index<K,V> extends HashMap<K,V> {
+
+    private final Function<V, K> keyExtractor;
+
+    private Index(Function<V, K> keyExtractor) {
+        this.keyExtractor = keyExtractor;
+    }
     /**
      * Static factory method
      *
@@ -23,9 +27,16 @@ public class Index<K,V> extends HashMap<K,V> {
      * @param <V> value type
      */
     public static <K, V> Index<K, V> createIndex() {
-        return new Index<>();
+        return new Index<>(null);
     }
 
+    public static <K, V> Index<K, V> createIndex(Function<V, K> keyExtractor) {
+        return new Index<>(keyExtractor);
+    }
+
+    public K extractKey(V value) {
+        return keyExtractor.apply(value);
+    }
     /**
      * Wrapper over the put method, ensuring no duplicate key will be entered
      * such decision is done, as parking slot cannot have duplicate key, and trying

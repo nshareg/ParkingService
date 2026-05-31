@@ -19,6 +19,13 @@ import java.util.UUID;
 public interface ParkingRepository {
 
     /**
+     * Initializing the underlying storage: creating the {@code slots} table
+     * and registering an index on the {@code slot_id} column for O(1) lookups
+     * @throws SQLException if the table or index cannot be created
+     */
+    void init() throws SQLException;
+
+    /**
      * Adding {@link ParkingSlot} object to the repository
      * @param parkingSlot the {@link ParkingSlot} to add
      * @throws SQLException if the slot cannot be added

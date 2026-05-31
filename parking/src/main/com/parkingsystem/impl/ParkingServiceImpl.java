@@ -30,6 +30,16 @@ public class ParkingServiceImpl implements ParkingService {
     }
 
     @Override
+    public void init() throws SQLException {
+        writeLock.lock();
+        try {
+            repository.init();
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    @Override
     public ParkingSlot addSlot(SlotType type) throws SQLException {
         writeLock.lock();
         try {
