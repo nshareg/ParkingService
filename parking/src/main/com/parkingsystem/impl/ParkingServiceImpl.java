@@ -1,5 +1,6 @@
 package main.com.parkingsystem.impl;
 
+import lombok.NonNull;
 import main.com.parkingsystem.contract.ParkingRepository;
 import main.com.parkingsystem.contract.ParkingService;
 import main.com.parkingsystem.entity.ParkingSlot;
@@ -40,7 +41,7 @@ public class ParkingServiceImpl implements ParkingService {
     }
 
     @Override
-    public ParkingSlot addSlot(SlotType type) throws SQLException {
+    public ParkingSlot addSlot(@NonNull SlotType type) throws SQLException {
         writeLock.lock();
         try {
             ParkingSlot slot = new ParkingSlot(type);
@@ -52,7 +53,7 @@ public class ParkingServiceImpl implements ParkingService {
     }
 
     @Override
-    public Optional<ParkingSlot> removeSlot(UUID id) throws SQLException {
+    public Optional<ParkingSlot> removeSlot(@NonNull UUID id) throws SQLException {
         writeLock.lock();
         try {
             return repository.remove(id);
@@ -62,18 +63,18 @@ public class ParkingServiceImpl implements ParkingService {
     }
 
     @Override
-    public Optional<ParkingSlot> park(String numberPlate) throws SQLException {
+    public Optional<ParkingSlot> park(@NonNull String numberPlate) throws SQLException {
         return park(numberPlate, SlotType.REGULAR);
     }
 
     @Override
-    public Optional<ParkingSlot> park(String numberPlate, SlotType slotType) throws SQLException {
+    public Optional<ParkingSlot> park(@NonNull String numberPlate, @NonNull SlotType slotType) throws SQLException {
         writeLock.lock();
         try {
             Optional<ParkingSlot> free = repository.findAllFree().stream()
                     .filter(x -> x.getType().equals(slotType))
                     .findFirst();
-            if (free.isEmpty()) return Optional.empty();
+            if (free.isEmpty() || findByNumberPlate(numberPlate).isPresent()) return Optional.empty();
             ParkingSlot slot = free.get();
             slot.book(numberPlate);
             repository.update(slot);
@@ -84,7 +85,7 @@ public class ParkingServiceImpl implements ParkingService {
     }
 
     @Override
-    public Optional<ParkingSlot> release(String numberPlate) throws SQLException {
+    public Optional<ParkingSlot> release(@NonNull String numberPlate) throws SQLException {
         writeLock.lock();
         try {
             Optional<ParkingSlot> found = repository.findByNumberPlate(numberPlate);
@@ -129,7 +130,7 @@ public class ParkingServiceImpl implements ParkingService {
     }
 
     @Override
-    public List<ParkingSlot> findByType(SlotType type) throws SQLException {
+    public List<ParkingSlot> findByType(@NonNull SlotType type) throws SQLException {
         readLock.lock();
         try {
             return repository.findByType(type);
@@ -139,7 +140,7 @@ public class ParkingServiceImpl implements ParkingService {
     }
 
     @Override
-    public Optional<ParkingSlot> findByNumberPlate(String plate) throws SQLException {
+    public Optional<ParkingSlot> findByNumberPlate(@NonNull String plate) throws SQLException {
         readLock.lock();
         try {
             return repository.findByNumberPlate(plate);
