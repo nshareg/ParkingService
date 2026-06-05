@@ -34,7 +34,13 @@ public class InMemoryPreparedStatement implements PreparedStatement {
         if (upper.startsWith("DELETE")) return executeDelete();
         if (upper.startsWith("CREATE")) return executeCreate();
         if (upper.startsWith("ALTER")) return executeAlter();
+        if (upper.startsWith("TRUNCATE")) return executeTruncate();
         throw new SQLException("Unsupported: " + query);
+    }
+
+    private int executeTruncate() throws SQLException {
+        Table<Map<String, Object>> table = resolveTable(extractTableName("TRUNCATE TABLE "));
+        return table.remove(row -> true);
     }
 
     private int executeAlter() throws SQLException {
