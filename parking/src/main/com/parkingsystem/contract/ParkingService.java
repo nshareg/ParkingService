@@ -2,6 +2,7 @@ package main.com.parkingsystem.contract;
 
 import main.com.parkingsystem.helpers.SlotType;
 import main.com.parkingsystem.entity.ParkingSlot;
+import main.com.parkingsystem.entity.ParkingSession;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -41,4 +42,10 @@ public interface ParkingService {
     int countFree() throws SQLException;
 
     int countBooked() throws SQLException;
+
+    List<ParkingSession> slotHistory(UUID slotId) throws SQLException;
+
+    List<ParkingSession> plateHistory(String numberPlate) throws SQLException;
+
+    List<ParkingSession> allSessions() throws SQLException;
 }

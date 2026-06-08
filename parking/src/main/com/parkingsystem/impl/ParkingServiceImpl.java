@@ -3,6 +3,8 @@ package main.com.parkingsystem.impl;
 import lombok.NonNull;
 import main.com.parkingsystem.contract.ParkingRepository;
 import main.com.parkingsystem.contract.ParkingService;
+import main.com.parkingsystem.contract.ParkingSessionRepository;
+import main.com.parkingsystem.entity.ParkingSession;
 import main.com.parkingsystem.entity.ParkingSlot;
 import main.com.parkingsystem.helpers.SlotType;
 
@@ -21,13 +23,20 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class ParkingServiceImpl implements ParkingService {
 
     private final ParkingRepository repository;
+    //junction table
+    private final ParkingSessionRepository sessionRepository;
 
     private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
     private final Lock readLock = readWriteLock.readLock();
     private final Lock writeLock = readWriteLock.writeLock();
 
     public ParkingServiceImpl(ParkingRepository repository) {
+        this(repository, null);
+    }
+
+    public ParkingServiceImpl(ParkingRepository repository, ParkingSessionRepository sessionRepository) {
         this.repository = repository;
+        this.sessionRepository = sessionRepository;
     }
 
     @Override
@@ -35,6 +44,9 @@ public class ParkingServiceImpl implements ParkingService {
         writeLock.lock();
         try {
             repository.init();
+            if (sessionRepository != null) {
+                sessionRepository.init();
+            }
         } finally {
             writeLock.unlock();
         }
@@ -78,6 +90,9 @@ public class ParkingServiceImpl implements ParkingService {
             ParkingSlot slot = free.get();
             slot.book(numberPlate);
             repository.update(slot);
+            if (sessionRepository != null) {
+                sessionRepository.add(new ParkingSession(slot.getSlotID(), numberPlate));
+            }
             return Optional.of(slot);
         } finally {
             writeLock.unlock();
@@ -93,6 +108,14 @@ public class ParkingServiceImpl implements ParkingService {
             ParkingSlot slot = found.get();
             slot.release();
             repository.update(slot);
+            if (sessionRepository != null) {
+                Optional<ParkingSession> open = sessionRepository.findActiveByNumberPlate(numberPlate);
+                if (open.isPresent()) {
+                    ParkingSession session = open.get();
+                    session.close();
+                    sessionRepository.update(session);
+                }
+            }
             return Optional.of(slot);
         } finally {
             writeLock.unlock();
@@ -174,6 +197,36 @@ public class ParkingServiceImpl implements ParkingService {
         readLock.lock();
         try {
             return repository.countBooked();
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    @Override
+    public List<ParkingSession> slotHistory(@NonNull UUID slotId) throws SQLException {
+        readLock.lock();
+        try {
+            return sessionRepository == null ? List.of() : sessionRepository.findBySlot(slotId);
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    @Override
+    public List<ParkingSession> plateHistory(@NonNull String numberPlate) throws SQLException {
+        readLock.lock();
+        try {
+            return sessionRepository == null ? List.of() : sessionRepository.findByNumberPlate(numberPlate);
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    @Override
+    public List<ParkingSession> allSessions() throws SQLException {
+        readLock.lock();
+        try {
+            return sessionRepository == null ? List.of() : sessionRepository.findAll();
         } finally {
             readLock.unlock();
         }
