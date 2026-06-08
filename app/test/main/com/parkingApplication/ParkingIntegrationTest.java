@@ -6,6 +6,8 @@ import main.com.parkingsystem.entity.ParkingSlot;
 import main.com.parkingsystem.helpers.SlotType;
 import main.com.parkingsystem.impl.ParkingRepositoryimpl;
 import main.com.parkingsystem.impl.ParkingServiceImpl;
+import main.com.parkingsystem.impl.ParkingSessionRepositoryimpl;
+import main.com.parkingsystem.entity.ParkingSession;
 
 import org.junit.jupiter.api.*;
 
@@ -16,8 +18,10 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -28,7 +32,8 @@ class ParkingIntegrationTest {
     private static final boolean USE_IN_MEMORY =
             Boolean.parseBoolean(System.getenv().getOrDefault("USE_IN_MEMORY", "false"));
 
-    private ParkingService service;
+    private ParkingService service;          // Sections A & B — no session history
+    private ParkingService sessionService;   // Section M — session-enabled (many-to-many)
     private Connection connection;
 
     private static Connection openConnection() throws SQLException {
@@ -44,6 +49,17 @@ class ParkingIntegrationTest {
                 "jdbc:postgresql://" + host + ":" + port + "/" + db, user, password);
     }
 
+    // Clears every table between tests. 'slots CASCADE' clears the child tables on Postgres;
+    // the explicit parking_sessions truncate covers the in-memory engine (which ignores CASCADE).
+    private static void truncateAll(Connection conn) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("TRUNCATE TABLE slots CASCADE")) {
+            ps.executeUpdate();
+        }
+        try (PreparedStatement ps = conn.prepareStatement("TRUNCATE TABLE parking_sessions")) {
+            ps.executeUpdate();
+        }
+    }
+
     @BeforeAll
     static void createSchema() throws SQLException {
         try (Connection connection = openConnection()) {
@@ -51,26 +67,37 @@ class ParkingIntegrationTest {
             //  - in-memory: via the repository's init() (Storage is static/shared);
             //  - Postgres: by database/01-schema.sql at container startup, so no init() here.
             if (USE_IN_MEMORY) {
-                new ParkingServiceImpl(new ParkingRepositoryimpl(connection)).init();
+                // The in-memory Storage is static and shared across the JVM, so the tables may
+                // already exist from an earlier run. Create them only if missing; the TRUNCATEs
+                // below guarantee a clean slate either way. (On Postgres both tables come from
+                // database/01-schema.sql at container startup, so no init() here.)
+                try {
+                    new ParkingRepositoryimpl(connection).init();
+                } catch (SQLException alreadyInitialised) {
+                    // table already exists — fine
+                }
+                try {
+                    new ParkingSessionRepositoryimpl(connection).init();
+                } catch (SQLException alreadyInitialised) {
+                    // table already exists — fine
+                }
             }
-            // Start from a clean table regardless of any leftover state.
-            try (PreparedStatement truncate = connection.prepareStatement("TRUNCATE TABLE slots")) {
-                truncate.executeUpdate();
-            }
+            // Start from clean tables regardless of any leftover state.
+            truncateAll(connection);
         }
     }
 
     @BeforeEach
     void setUp() throws SQLException {
         connection = openConnection();
-        service = new ParkingServiceImpl(new ParkingRepositoryimpl(connection));
+        ParkingRepositoryimpl slots = new ParkingRepositoryimpl(connection);
+        service = new ParkingServiceImpl(slots);
+        sessionService = new ParkingServiceImpl(slots, new ParkingSessionRepositoryimpl(connection));
     }
 
     @AfterEach
     void tearDown() throws Exception {
-        try (PreparedStatement truncate = connection.prepareStatement("TRUNCATE TABLE slots")) {
-            truncate.executeUpdate();
-        }
+        truncateAll(connection);
         connection.close();
     }
 
@@ -432,5 +459,84 @@ class ParkingIntegrationTest {
 
         assertEquals(1, successCount, "Exactly one concurrent release should succeed");
         assertEquals(1, service.countFree(), "Slot should be free after exactly one successful release");
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // SECTION M — MANY-TO-MANY (vehicle ⇄ slot over time, via parking_sessions)
+    // Uses the session-enabled service so park()/release() journal sessions.
+    // ════════════════════════════════════════════════════════════════
+
+    private long activeSessions() throws SQLException {
+        return sessionService.allSessions().stream().filter(ParkingSession::isActive).count();
+    }
+
+    @Test
+    @DisplayName("M01. oneSlot_hostsManyPlates_overTime")
+    void m01_oneSlot_hostsManyPlates_overTime() throws SQLException {
+        ParkingSlot slot = sessionService.addSlot(SlotType.REGULAR);
+
+        sessionService.park("CAR-1");
+        sessionService.release("CAR-1");
+        sessionService.park("CAR-2");
+        sessionService.release("CAR-2");
+        sessionService.park("CAR-3"); // still parked
+
+        List<ParkingSession> history = sessionService.slotHistory(slot.getSlotID());
+        assertEquals(3, history.size(), "the single slot accumulated three sessions");
+        assertEquals(Set.of("CAR-1", "CAR-2", "CAR-3"),
+                history.stream().map(ParkingSession::getNumberPlate).collect(Collectors.toSet()),
+                "three different vehicles used the same slot");
+        assertEquals(1, activeSessions(), "only the last park is still open");
+    }
+
+    @Test
+    @DisplayName("M02. onePlate_usesManySlots_overTime")
+    void m02_onePlate_usesManySlots_overTime() throws SQLException {
+        // Distinct slot TYPES keep exactly one matching slot free at each park, so the plate
+        // provably lands on two different slots — and no slot is deleted (Postgres-FK-safe).
+        ParkingSlot regular  = sessionService.addSlot(SlotType.REGULAR);
+        ParkingSlot electric = sessionService.addSlot(SlotType.ELECTRIC);
+
+        sessionService.park("ROVER", SlotType.REGULAR);   // -> regular
+        sessionService.release("ROVER");
+        sessionService.park("ROVER", SlotType.ELECTRIC);  // -> electric
+
+        List<ParkingSession> history = sessionService.plateHistory("ROVER");
+        assertEquals(2, history.size(), "the plate accumulated two sessions");
+        assertEquals(Set.of(regular.getSlotID(), electric.getSlotID()),
+                history.stream().map(ParkingSession::getSlotId).collect(Collectors.toSet()),
+                "the same vehicle used two different slots");
+        assertEquals(1, activeSessions(), "only the current park is still open");
+    }
+
+    @Test
+    @DisplayName("M03. release_closesSessionButKeepsHistory")
+    void m03_release_closesSessionButKeepsHistory() throws SQLException {
+        ParkingSlot slot = sessionService.addSlot(SlotType.REGULAR);
+        sessionService.park("KEEP-1");
+        sessionService.release("KEEP-1");
+
+        List<ParkingSession> history = sessionService.slotHistory(slot.getSlotID());
+        assertEquals(1, history.size(), "the closed session is kept as history");
+        assertFalse(history.get(0).isActive(), "session is closed after release");
+        assertNotNull(history.get(0).getReleasedAt(), "release stamps a timestamp");
+        assertEquals(0, activeSessions(), "nothing is parked");
+    }
+
+    @Test
+    @DisplayName("M04. matrix_manyPlatesAndManySlots_allLinksRecorded")
+    void m04_matrix_manyPlatesAndManySlots_allLinksRecorded() throws SQLException {
+        sessionService.addSlot(SlotType.REGULAR);
+        sessionService.addSlot(SlotType.REGULAR);
+
+        sessionService.park("A1");
+        sessionService.park("A2");
+        sessionService.release("A1");
+        sessionService.release("A2");
+        sessionService.park("B1");
+        sessionService.park("B2");
+
+        assertEquals(4, sessionService.allSessions().size(), "every park event is recorded");
+        assertEquals(2, activeSessions(), "two cars are currently parked");
     }
 }
