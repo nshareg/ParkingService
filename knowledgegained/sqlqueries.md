@@ -1,0 +1,1 @@
+As I already had a vast background in SQL, no subsequent findings were there. The only thing worth mentioning is the first hands-on experience with named parameter binding in SQL.
