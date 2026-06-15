@@ -1,8 +1,10 @@
 package main.com.parkingApplication;
 
+import main.com.parkingsystem.contract.ParkingService;
 import main.com.parkingsystem.entity.ParkingSlot;
 import main.com.parkingsystem.helpers.SlotType;
 import main.com.parkingsystem.impl.ParkingRepositoryimpl;
+import main.com.parkingsystem.impl.ParkingServiceImpl;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,10 +42,10 @@ class ConnectionPoolPerformanceTest {
                 try {
                     start.await();
                     try (Connection conn = Database.getConnection()) {
-                        ParkingRepositoryimpl repo = new ParkingRepositoryimpl(conn);
-                        ParkingSlot slot = new ParkingSlot(SlotType.REGULAR);
-                        repo.add(slot);
-                        repo.remove(slot.getSlotID());
+                        ParkingService service =
+                                new ParkingServiceImpl(conn, new ParkingRepositoryimpl(conn));
+                        ParkingSlot slot = service.addSlot(SlotType.REGULAR);
+                        service.removeSlot(slot.getSlotID());
                     }
                     success.incrementAndGet();
                 } catch (Throwable t) {

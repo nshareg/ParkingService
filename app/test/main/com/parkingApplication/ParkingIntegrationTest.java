@@ -24,6 +24,7 @@ import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 @TestMethodOrder(MethodOrderer.DisplayName.class)
 class ParkingIntegrationTest {
@@ -91,8 +92,12 @@ class ParkingIntegrationTest {
     void setUp() throws SQLException {
         connection = openConnection();
         ParkingRepositoryimpl slots = new ParkingRepositoryimpl(connection);
-        service = new ParkingServiceImpl(slots);
-        sessionService = new ParkingServiceImpl(slots, new ParkingSessionRepositoryimpl(connection));
+        // The service delimits transactions on the Postgres connection; the in-memory engine
+        // has no transaction support, so it gets a null connection (the service then runs the
+        // repository calls directly, exactly as the old lock-free-but-untransacted path did).
+        Connection txConnection = USE_IN_MEMORY ? null : connection;
+        service = new ParkingServiceImpl(txConnection, slots);
+        sessionService = new ParkingServiceImpl(txConnection, slots, new ParkingSessionRepositoryimpl(connection));
     }
 
     @AfterEach
@@ -216,33 +221,42 @@ class ParkingIntegrationTest {
     }
 
     @Test
-    @DisplayName("A10. concurrency_parallelParks_onlyOneSucceeds")
-    void a10_concurrency_parallelParks_onlyOneSucceeds() throws Exception {
+    @DisplayName("A10. concurrency_parallelParks_leaveConsistentState")
+    void a10_concurrency_parallelParks_leaveConsistentState() throws Exception {
+        // Concurrency control moved from a JVM lock to the database, so each thread now gets its
+        // OWN pooled connection + service — a single JDBC connection is never shared across threads.
+        assumeFalse(USE_IN_MEMORY, "needs a real RDBMS: the in-memory engine has no transactions");
         service.addSlot(SlotType.REGULAR);
 
-        ExecutorService pool = Executors.newFixedThreadPool(10);
-        List<Callable<Optional<ParkingSlot>>> tasks = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
+        int threads = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch go = new CountDownLatch(1);
+        List<Future<Optional<ParkingSlot>>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
             final int index = i;
-            tasks.add(() -> service.park("THREAD-" + index));
+            futures.add(pool.submit(() -> {
+                ready.countDown();
+                go.await();                       // release every thread at the same instant
+                try (Connection c = openConnection()) {
+                    ParkingService s = new ParkingServiceImpl(c, new ParkingRepositoryimpl(c));
+                    return s.park("THREAD-" + index);
+                }
+            }));
         }
-
-        List<Future<Optional<ParkingSlot>>> futures = pool.invokeAll(tasks);
+        ready.await();
+        go.countDown();
         pool.shutdown();
-        pool.awaitTermination(5, TimeUnit.SECONDS);
+        assertTrue(pool.awaitTermination(15, TimeUnit.SECONDS), "threads did not finish in time");
+        for (Future<Optional<ParkingSlot>> f : futures) f.get();   // surface any thread error
 
-        long successCount = futures.stream()
-                .map(f -> {
-                    try {
-                        return f.get();
-                    } catch (Exception e) {
-                        return Optional.<ParkingSlot>empty();
-                    }
-                })
-                .filter(Optional::isPresent)
-                .count();
-
-        assertEquals(1, successCount, "Exactly one concurrent park should succeed for a single free slot");
+        // Whatever the interleaving, the persisted state must stay consistent: the single slot ends
+        // up booked by exactly one car, with no phantom free copies. (The stronger "only one caller
+        // is told it won" guarantee needs SERIALIZABLE / SELECT ... FOR UPDATE — see
+        // IsolationLevelDemoTest.)
+        assertEquals(1, service.count(), "still exactly one slot");
+        assertEquals(1, service.countBooked(), "the slot is booked by exactly one car");
+        assertEquals(0, service.countFree(), "no phantom free copies");
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -431,34 +445,37 @@ class ParkingIntegrationTest {
     }
 
     @Test
-    @DisplayName("B15. concurrency_parallelReleases_onlyOneSucceeds")
-    void b15_concurrency_parallelReleases_onlyOneSucceeds() throws Exception {
+    @DisplayName("B15. concurrency_parallelReleases_leaveSlotFree")
+    void b15_concurrency_parallelReleases_leaveSlotFree() throws Exception {
+        assumeFalse(USE_IN_MEMORY, "needs a real RDBMS: the in-memory engine has no transactions");
         service.addSlot(SlotType.REGULAR);
         service.park("CON-PLATE");
 
-        ExecutorService pool = Executors.newFixedThreadPool(10);
-        List<Callable<Optional<ParkingSlot>>> tasks = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
-            tasks.add(() -> service.release("CON-PLATE"));
+        int threads = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch go = new CountDownLatch(1);
+        List<Future<Optional<ParkingSlot>>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            futures.add(pool.submit(() -> {
+                ready.countDown();
+                go.await();
+                try (Connection c = openConnection()) {
+                    ParkingService s = new ParkingServiceImpl(c, new ParkingRepositoryimpl(c));
+                    return s.release("CON-PLATE");
+                }
+            }));
         }
-
-        List<Future<Optional<ParkingSlot>>> futures = pool.invokeAll(tasks);
+        ready.await();
+        go.countDown();
         pool.shutdown();
-        pool.awaitTermination(5, TimeUnit.SECONDS);
+        assertTrue(pool.awaitTermination(15, TimeUnit.SECONDS), "threads did not finish in time");
+        for (Future<Optional<ParkingSlot>> f : futures) f.get();   // surface any thread error
 
-        long successCount = futures.stream()
-                .map(f -> {
-                    try {
-                        return f.get();
-                    } catch (Exception e) {
-                        return Optional.<ParkingSlot>empty();
-                    }
-                })
-                .filter(Optional::isPresent)
-                .count();
-
-        assertEquals(1, successCount, "Exactly one concurrent release should succeed");
-        assertEquals(1, service.countFree(), "Slot should be free after exactly one successful release");
+        // Regardless of interleaving, the slot must end up free and no car parked.
+        assertEquals(1, service.count(), "still exactly one slot");
+        assertEquals(1, service.countFree(), "the slot ends up free after the concurrent releases");
+        assertEquals(0, service.countBooked(), "no car remains parked");
     }
 
     // ════════════════════════════════════════════════════════════════
