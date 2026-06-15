@@ -8,13 +8,11 @@ import main.com.parkingsystem.entity.ParkingSession;
 import main.com.parkingsystem.entity.ParkingSlot;
 import main.com.parkingsystem.helpers.SlotType;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /*
     Created by anshanyan
@@ -26,52 +24,80 @@ public class ParkingServiceImpl implements ParkingService {
     //junction table
     private final ParkingSessionRepository sessionRepository;
 
-    private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
-    private final Lock readLock = readWriteLock.readLock();
-    private final Lock writeLock = readWriteLock.writeLock();
+    private final Connection connection;
+
+    /** Action over the repositories that may fail with a {@link SQLException}. */
+    @FunctionalInterface
+    private interface SqlAction<T> {
+        T run() throws SQLException;
+    }
 
     public ParkingServiceImpl(ParkingRepository repository) {
-        this(repository, null);
+        this(null, repository, null);
     }
 
     public ParkingServiceImpl(ParkingRepository repository, ParkingSessionRepository sessionRepository) {
+        this(null, repository, sessionRepository);
+    }
+
+    public ParkingServiceImpl(Connection connection, ParkingRepository repository) {
+        this(connection, repository, null);
+    }
+
+    public ParkingServiceImpl(Connection connection,
+                              ParkingRepository repository,
+                              ParkingSessionRepository sessionRepository) {
+        this.connection = connection;
         this.repository = repository;
         this.sessionRepository = sessionRepository;
     }
 
+    /**
+     * Runs {@code action} as a single atomic transaction: everything commits together or, on any
+     * failure, nothing does (rollback). When there is no usable connection the action just runs
+     * as-is (no-op transaction), so mock and in-memory callers behave exactly as before.
+     */
+    private <T> T inTransaction(SqlAction<T> action) throws SQLException {
+        if (connection == null) {
+            return action.run();
+        }
+        boolean previousAutoCommit = connection.getAutoCommit();
+        connection.setAutoCommit(false);
+        try {
+            T result = action.run();
+            connection.commit();
+            return result;
+        } catch (SQLException | RuntimeException e) {
+            connection.rollback();
+            throw e;
+        } finally {
+            connection.setAutoCommit(previousAutoCommit);
+        }
+    }
+
     @Override
     public void init() throws SQLException {
-        writeLock.lock();
-        try {
+        inTransaction(() -> {
             repository.init();
             if (sessionRepository != null) {
                 sessionRepository.init();
             }
-        } finally {
-            writeLock.unlock();
-        }
+            return null;
+        });
     }
 
     @Override
     public ParkingSlot addSlot(@NonNull SlotType type) throws SQLException {
-        writeLock.lock();
-        try {
+        return inTransaction(() -> {
             ParkingSlot slot = new ParkingSlot(type);
             repository.add(slot);
             return slot;
-        } finally {
-            writeLock.unlock();
-        }
+        });
     }
 
     @Override
     public Optional<ParkingSlot> removeSlot(@NonNull UUID id) throws SQLException {
-        writeLock.lock();
-        try {
-            return repository.remove(id);
-        } finally {
-            writeLock.unlock();
-        }
+        return inTransaction(() -> repository.remove(id));
     }
 
     @Override
@@ -81,12 +107,11 @@ public class ParkingServiceImpl implements ParkingService {
 
     @Override
     public Optional<ParkingSlot> park(@NonNull String numberPlate, @NonNull SlotType slotType) throws SQLException {
-        writeLock.lock();
-        try {
+        return inTransaction(() -> {
             Optional<ParkingSlot> free = repository.findAllFree().stream()
                     .filter(x -> x.getType().equals(slotType))
                     .findFirst();
-            if (free.isEmpty() || findByNumberPlate(numberPlate).isPresent()) return Optional.empty();
+            if (free.isEmpty() || repository.findByNumberPlate(numberPlate).isPresent()) return Optional.empty();
             ParkingSlot slot = free.get();
             slot.book(numberPlate);
             repository.update(slot);
@@ -94,15 +119,12 @@ public class ParkingServiceImpl implements ParkingService {
                 sessionRepository.add(new ParkingSession(slot.getSlotID(), numberPlate));
             }
             return Optional.of(slot);
-        } finally {
-            writeLock.unlock();
-        }
+        });
     }
 
     @Override
     public Optional<ParkingSlot> release(@NonNull String numberPlate) throws SQLException {
-        writeLock.lock();
-        try {
+        return inTransaction(() -> {
             Optional<ParkingSlot> found = repository.findByNumberPlate(numberPlate);
             if (found.isEmpty()) return Optional.empty();
             ParkingSlot slot = found.get();
@@ -117,118 +139,61 @@ public class ParkingServiceImpl implements ParkingService {
                 }
             }
             return Optional.of(slot);
-        } finally {
-            writeLock.unlock();
-        }
+        });
     }
 
     @Override
     public List<ParkingSlot> findAll() throws SQLException {
-        readLock.lock();
-        try {
-            return repository.findAll();
-        } finally {
-            readLock.unlock();
-        }
+        return repository.findAll();
     }
 
     @Override
     public List<ParkingSlot> findAllFree() throws SQLException {
-        readLock.lock();
-        try {
-            return repository.findAllFree();
-        } finally {
-            readLock.unlock();
-        }
+        return repository.findAllFree();
     }
 
     @Override
     public List<ParkingSlot> findAllBooked() throws SQLException {
-        readLock.lock();
-        try {
-            return repository.findAllBooked();
-        } finally {
-            readLock.unlock();
-        }
+        return repository.findAllBooked();
     }
 
     @Override
     public List<ParkingSlot> findByType(@NonNull SlotType type) throws SQLException {
-        readLock.lock();
-        try {
-            return repository.findByType(type);
-        } finally {
-            readLock.unlock();
-        }
+        return repository.findByType(type);
     }
 
     @Override
     public Optional<ParkingSlot> findByNumberPlate(@NonNull String plate) throws SQLException {
-        readLock.lock();
-        try {
-            return repository.findByNumberPlate(plate);
-        } finally {
-            readLock.unlock();
-        }
+        return repository.findByNumberPlate(plate);
     }
 
     @Override
     public int count() throws SQLException {
-        readLock.lock();
-        try {
-            return repository.count();
-        } finally {
-            readLock.unlock();
-        }
+        return repository.count();
     }
 
     @Override
     public int countFree() throws SQLException {
-        readLock.lock();
-        try {
-            return repository.countFree();
-        } finally {
-            readLock.unlock();
-        }
+        return repository.countFree();
     }
 
     @Override
     public int countBooked() throws SQLException {
-        readLock.lock();
-        try {
-            return repository.countBooked();
-        } finally {
-            readLock.unlock();
-        }
+        return repository.countBooked();
     }
 
     @Override
     public List<ParkingSession> slotHistory(@NonNull UUID slotId) throws SQLException {
-        readLock.lock();
-        try {
-            return sessionRepository == null ? List.of() : sessionRepository.findBySlot(slotId);
-        } finally {
-            readLock.unlock();
-        }
+        return sessionRepository == null ? List.of() : sessionRepository.findBySlot(slotId);
     }
 
     @Override
     public List<ParkingSession> plateHistory(@NonNull String numberPlate) throws SQLException {
-        readLock.lock();
-        try {
-            return sessionRepository == null ? List.of() : sessionRepository.findByNumberPlate(numberPlate);
-        } finally {
-            readLock.unlock();
-        }
+        return sessionRepository == null ? List.of() : sessionRepository.findByNumberPlate(numberPlate);
     }
 
     @Override
     public List<ParkingSession> allSessions() throws SQLException {
-        readLock.lock();
-        try {
-            return sessionRepository == null ? List.of() : sessionRepository.findAll();
-        } finally {
-            readLock.unlock();
-        }
+        return sessionRepository == null ? List.of() : sessionRepository.findAll();
     }
 }

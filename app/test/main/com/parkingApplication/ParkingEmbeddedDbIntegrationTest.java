@@ -21,6 +21,9 @@ import org.junit.jupiter.api.TestMethodOrder;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -61,7 +64,9 @@ class ParkingEmbeddedDbIntegrationTest {
     @BeforeAll
     void initSchemaAndSeed() throws Exception {
         connection = DriverManager.getConnection(URL, "sa", "");
-        runScript("/db/schema.sql");
+        // Schema is the canonical one shared with Postgres (database/01-schema.sql);
+        // only the test fixtures (seed.sql) live in test-resources.
+        runFileScript(canonicalSchema());
         runScript("/db/seed.sql");
         connection.setAutoCommit(false);
 
@@ -86,6 +91,24 @@ class ParkingEmbeddedDbIntegrationTest {
                         "missing test resource " + resource), StandardCharsets.UTF_8)) {
             RunScript.execute(connection, r);
         }
+    }
+
+    private void runFileScript(Path script) throws Exception {
+        try (Reader r = Files.newBufferedReader(script, StandardCharsets.UTF_8)) {
+            RunScript.execute(connection, r);
+        }
+    }
+
+    // Walk up from the working directory to find the repo's canonical schema, so the
+    // test works whether it runs from the app module or the project root.
+    private static Path canonicalSchema() {
+        Path start = Paths.get("").toAbsolutePath();
+        for (Path dir = start; dir != null; dir = dir.getParent()) {
+            Path candidate = dir.resolve("database").resolve("01-schema.sql");
+            if (Files.exists(candidate)) return candidate;
+        }
+        throw new IllegalStateException(
+                "could not locate database/01-schema.sql starting from " + start);
     }
 
     private long activeSessions() throws SQLException {
