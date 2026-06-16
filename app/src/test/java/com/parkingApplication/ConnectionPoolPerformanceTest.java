@@ -1,15 +1,11 @@
-package main.com.parkingApplication;
-
-import main.com.parkingsystem.contract.ParkingService;
-import main.com.parkingsystem.entity.ParkingSlot;
-import main.com.parkingsystem.helpers.SlotType;
-import main.com.parkingsystem.impl.ParkingRepositoryimpl;
-import main.com.parkingsystem.impl.ParkingServiceImpl;
+package com.parkingApplication;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -42,10 +38,18 @@ class ConnectionPoolPerformanceTest {
                 try {
                     start.await();
                     try (Connection conn = Database.getConnection()) {
-                        ParkingService service =
-                                new ParkingServiceImpl(conn, new ParkingRepositoryimpl(conn));
-                        ParkingSlot slot = service.addSlot(SlotType.REGULAR);
-                        service.removeSlot(slot.getSlotID());
+                        UUID id = UUID.randomUUID();
+                        try (PreparedStatement ins = conn.prepareStatement(
+                                "INSERT INTO slots (slot_id, type, booked, number_plate) " +
+                                        "VALUES (?, 'REGULAR', false, NULL)")) {
+                            ins.setObject(1, id);
+                            ins.executeUpdate();
+                        }
+                        try (PreparedStatement del = conn.prepareStatement(
+                                "DELETE FROM slots WHERE slot_id = ?")) {
+                            del.setObject(1, id);
+                            del.executeUpdate();
+                        }
                     }
                     success.incrementAndGet();
                 } catch (Throwable t) {

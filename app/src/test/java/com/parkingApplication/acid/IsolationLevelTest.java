@@ -1,10 +1,6 @@
-package main.com.parkingApplication.acid;
+package com.parkingApplication.acid;
 
-import main.com.parkingsystem.entity.ParkingSession;
-import main.com.parkingsystem.entity.ParkingSlot;
-import main.com.parkingsystem.helpers.SlotType;
-import main.com.parkingsystem.impl.ParkingRepositoryimpl;
-import main.com.parkingsystem.impl.ParkingSessionRepositoryimpl;
+import com.parkingsystem.helpers.SlotType;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,7 +8,8 @@ import org.junit.jupiter.api.Test;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,8 +23,7 @@ class IsolationLevelTest {
             c.setTransactionIsolation(isolation);
             c.setAutoCommit(false);
 
-            ParkingRepositoryimpl slots = new ParkingRepositoryimpl(c);
-            List<ParkingSlot> free = slots.findAllFree();
+            Optional<UUID> free = AcidTestDB.firstFreeSlot(c);
 
             raceLatch.countDown();
             if (!raceLatch.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
@@ -37,10 +33,9 @@ class IsolationLevelTest {
 
             if (free.isEmpty()) { c.rollback(); return false; }
 
-            ParkingSlot slot = free.get(0);
-            slot.book(plate);
-            slots.update(slot);
-            new ParkingSessionRepositoryimpl(c).add(new ParkingSession(slot.getSlotID(), plate));
+            UUID slotId = free.get();
+            AcidTestDB.bookSlot(c, slotId, plate);
+            AcidTestDB.insertSession(c, slotId, plate);
             c.commit();
             return true;
         } catch (Exception e) {
@@ -53,7 +48,7 @@ class IsolationLevelTest {
     private long race(int isolation) throws Exception {
         try (Connection c = AcidTestDB.openConnection()) {
             AcidTestDB.truncateParkingTables(c);
-            new ParkingRepositoryimpl(c).add(new ParkingSlot(SlotType.REGULAR));
+            AcidTestDB.insertFreeSlot(c, SlotType.REGULAR);
         }
 
         CountDownLatch raceLatch = new CountDownLatch(2);

@@ -1,10 +1,6 @@
-package main.com.parkingApplication.acid;
+package com.parkingApplication.acid;
 
-import main.com.parkingsystem.entity.ParkingSession;
-import main.com.parkingsystem.entity.ParkingSlot;
-import main.com.parkingsystem.helpers.SlotType;
-import main.com.parkingsystem.impl.ParkingRepositoryimpl;
-import main.com.parkingsystem.impl.ParkingSessionRepositoryimpl;
+import com.parkingsystem.helpers.SlotType;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * In our current db model, we can break the {@code Consistency} by having parking session, without parking slot registered on it. so having an orphan record.
+ * In our current db model, we can break the {@code Consistency} by having a parking session
+ * without a parking slot registered on it — i.e. an orphan record.
  */
 @TestMethodOrder(MethodOrderer.DisplayName.class)
 class ConsistencyBreakTest {
@@ -44,9 +41,7 @@ class ConsistencyBreakTest {
     }
 
     private UUID freshFreeSlot() throws SQLException {
-        ParkingSlot slot = new ParkingSlot(SlotType.REGULAR);
-        new ParkingRepositoryimpl(conn).add(slot);
-        return slot.getSlotID();
+        return AcidTestDB.insertFreeSlot(conn, SlotType.REGULAR);
     }
 
     private static void powerFailure() {
@@ -54,18 +49,13 @@ class ConsistencyBreakTest {
     }
 
     private void parkWithCrashBetweenWrites(boolean transactional, UUID slotId) throws SQLException {
-        ParkingRepositoryimpl slots = new ParkingRepositoryimpl(conn);
-        ParkingSessionRepositoryimpl sessions = new ParkingSessionRepositoryimpl(conn);
-
         if (transactional) conn.setAutoCommit(false);
         try {
-            ParkingSlot slot = slots.findById(slotId).orElseThrow();
-            slot.book(PLATE);
-            slots.update(slot);
+            AcidTestDB.bookSlot(conn, slotId, PLATE);
 
             powerFailure();
 
-            sessions.add(new ParkingSession(slotId, PLATE));
+            AcidTestDB.insertSession(conn, slotId, PLATE);
             if (transactional) conn.commit();
         } catch (RuntimeException crash) {
             if (transactional) conn.rollback();
@@ -75,13 +65,11 @@ class ConsistencyBreakTest {
     }
 
     private boolean slotIsBooked(UUID slotId) throws SQLException {
-        return new ParkingRepositoryimpl(conn).findById(slotId).orElseThrow().isBooked();
+        return AcidTestDB.isBooked(conn, slotId);
     }
 
     private long activeSessionsFor(UUID slotId) throws SQLException {
-        return new ParkingSessionRepositoryimpl(conn).findBySlot(slotId).stream()
-                .filter(ParkingSession::isActive)
-                .count();
+        return AcidTestDB.activeSessions(conn, slotId);
     }
 
     private static String check(boolean booked, long active) {

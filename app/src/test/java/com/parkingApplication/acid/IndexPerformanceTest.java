@@ -1,4 +1,4 @@
-package main.com.parkingApplication.acid;
+package com.parkingApplication.acid;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.DisplayName;
