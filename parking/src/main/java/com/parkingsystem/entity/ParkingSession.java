@@ -1,5 +1,6 @@
-package main.com.parkingsystem.entity;
+package com.parkingsystem.entity;
 
+import jakarta.persistence.*;
 import lombok.Getter;
 
 import java.time.Instant;
@@ -10,34 +11,37 @@ import java.util.UUID;
     Created by anshanyan
     on 08.06.26
 */
-
+@Entity
+@Table(name = "parking_sessions")
 @Getter
 public class ParkingSession {
-    private final UUID sessionId;
-    private final UUID slotId;
-    private final String numberPlate;
-    private final String parkedAt;
+
+    @Id
+    @Column(name = "session_id")
+    private UUID sessionId;
+
+    @Column(name = "slot_id", nullable = false)
+    private UUID slotId;
+
+    @Column(name = "number_plate", nullable = false)
+    private String numberPlate;
+
+    @Column(name = "parked_at", nullable = false)
+    private String parkedAt;
 
     private boolean active;
+
+    @Column(name = "released_at")
     private String releasedAt;
+
+    protected ParkingSession() {}
 
     public ParkingSession(UUID slotId, String numberPlate) {
         this.sessionId   = UUID.randomUUID();
-        this.slotId      = Objects.requireNonNull(slotId, "slotId must not be null");
-        this.numberPlate = Objects.requireNonNull(numberPlate, "numberPlate must not be null");
+        this.slotId      = Objects.requireNonNull(slotId);
+        this.numberPlate = Objects.requireNonNull(numberPlate);
         this.parkedAt    = Instant.now().toString();
         this.active      = true;
-    }
-
-
-    public ParkingSession(UUID sessionId, UUID slotId, String numberPlate,
-                          boolean active, String parkedAt, String releasedAt) {
-        this.sessionId   = Objects.requireNonNull(sessionId, "sessionId must not be null");
-        this.slotId      = Objects.requireNonNull(slotId, "slotId must not be null");
-        this.numberPlate = Objects.requireNonNull(numberPlate, "numberPlate must not be null");
-        this.active      = active;
-        this.parkedAt    = parkedAt;
-        this.releasedAt  = releasedAt;
     }
 
     public void close() {

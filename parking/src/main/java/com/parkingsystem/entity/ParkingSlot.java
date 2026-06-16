@@ -1,7 +1,8 @@
-package main.com.parkingsystem.entity;
+package com.parkingsystem.entity;
 
+import jakarta.persistence.*;
 import lombok.Getter;
-import main.com.parkingsystem.helpers.SlotType;
+import com.parkingsystem.helpers.SlotType;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -10,15 +11,26 @@ import java.util.UUID;
     Created by anshanyan
     on 23.05.26
 */
-
+@Entity
+@Table(name = "slots")
 @Getter
 public class ParkingSlot {
-    //variable names are self-descriptive
-    private final UUID slotID;
-    private final SlotType type;
+    @Id
+    @Column(name = "slot_id")
+    private UUID slotID;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false)
+    private SlotType type;
+
+    @Column(name = "booked", nullable = false)
     private boolean booked;
+
+    @Column(name = "number_plate")
     private String numberPlate;
+
+
+    public ParkingSlot(){}
 
     /**
      * Constructor setting random {@link UUID}
@@ -26,25 +38,7 @@ public class ParkingSlot {
      */
     public ParkingSlot(SlotType type) {
         this.slotID = UUID.randomUUID();
-        this.type   = Objects.requireNonNull(type, "type must not be null");
-        this.booked = false;
-    }
-
-    public ParkingSlot(UUID id, SlotType type, boolean booked, String numberPlate) {
-        this.slotID = id;
-        this.type   = Objects.requireNonNull(type, "type must not be null");
-        this.booked = booked;
-        this.numberPlate = numberPlate;
-    }
-
-    /**
-     * Reconstruction constructor — used when rehydrating a slot from persistent storage.
-     * @param slotID existing {@link UUID} from the data store
-     * @param type   {@link SlotType} of the slot
-     */
-    public ParkingSlot(UUID slotID, SlotType type) {
-        this.slotID = Objects.requireNonNull(slotID, "slotID must not be null");
-        this.type   = Objects.requireNonNull(type, "type must not be null");
+        this.type   = Objects.requireNonNull(type);
         this.booked = false;
     }
 
@@ -79,5 +73,17 @@ public class ParkingSlot {
                     slotID, type, numberPlate);
         }
         return String.format("ParkingSlot{id=%s, type=%s, FREE}", slotID, type);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ParkingSlot other)) return false;
+        return slotID != null && slotID.equals(other.slotID);
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
     }
 }

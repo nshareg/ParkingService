@@ -1,15 +1,15 @@
-package main.com.parkingsystem.impl;
+package com.parkingsystem.impl;
 
-import main.com.parkingsystem.contract.ParkingRepository;
-import main.com.parkingsystem.entity.ParkingSlot;
-import main.com.parkingsystem.helpers.SlotType;
+import com.parkingsystem.contract.ParkingRepository;
+import com.parkingsystem.contract.ParkingSessionRepository;
+import com.parkingsystem.entity.ParkingSlot;
+import com.parkingsystem.helpers.SlotType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,59 +24,60 @@ import static org.mockito.Mockito.*;
 class ParkingServiceImplTest {
 
     @Mock private ParkingRepository repo;
+    @Mock private ParkingSessionRepository sessionRepo;
     private ParkingServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new ParkingServiceImpl(repo);
+        service = new ParkingServiceImpl(repo, sessionRepo);
     }
 
     @Test
-    void addSlotPersists() throws SQLException {
+    void addSlotPersists() {
         ParkingSlot slot = service.addSlot(SlotType.REGULAR);
 
         assertNotNull(slot.getSlotID());
         assertEquals(SlotType.REGULAR, slot.getType());
         assertFalse(slot.isBooked());
-        verify(repo).add(slot);
+        verify(repo).save(slot);
     }
 
     @Test
-    void parkAssignsFreeSlot() throws SQLException {
+    void parkAssignsFreeSlot() {
         ParkingSlot free = new ParkingSlot(SlotType.REGULAR);
-        when(repo.findAllFree()).thenReturn(List.of(free));
+        when(repo.findByBookedFalse()).thenReturn(List.of(free));
 
         Optional<ParkingSlot> parked = service.park("AREG-1");
 
         assertTrue(parked.isPresent());
         assertTrue(parked.get().isBooked());
         assertEquals("AREG-1", parked.get().getNumberPlate());
-        verify(repo).update(free);
+        verify(repo).save(free);
     }
 
     @Test
-    void parkSelectsMatchingType() throws SQLException {
+    void parkSelectsMatchingType() {
         ParkingSlot regular = new ParkingSlot(SlotType.REGULAR);
         ParkingSlot electric = new ParkingSlot(SlotType.ELECTRIC);
-        when(repo.findAllFree()).thenReturn(List.of(regular, electric));
+        when(repo.findByBookedFalse()).thenReturn(List.of(regular, electric));
 
         Optional<ParkingSlot> parked = service.park("AREG-1", SlotType.ELECTRIC);
 
         assertTrue(parked.isPresent());
         assertEquals(SlotType.ELECTRIC, parked.get().getType());
-        verify(repo).update(electric);
+        verify(repo).save(electric);
     }
 
     @Test
-    void parkReturnsEmptyWhenFull() throws SQLException {
-        when(repo.findAllFree()).thenReturn(List.of());
+    void parkReturnsEmptyWhenFull() {
+        when(repo.findByBookedFalse()).thenReturn(List.of());
 
         assertTrue(service.park("AREG-1").isEmpty());
-        verify(repo, never()).update(any());
+        verify(repo, never()).save(any());
     }
 
     @Test
-    void releaseUnbooksSlot() throws SQLException {
+    void releaseUnbooksSlot() {
         ParkingSlot booked = new ParkingSlot(SlotType.REGULAR);
         booked.book("AREG-1");
         when(repo.findByNumberPlate("AREG-1")).thenReturn(Optional.of(booked));
@@ -85,29 +86,29 @@ class ParkingServiceImplTest {
 
         assertTrue(released.isPresent());
         assertFalse(released.get().isBooked());
-        verify(repo).update(booked);
+        verify(repo).save(booked);
     }
 
     @Test
-    void releaseUnknownPlateReturnsEmpty() throws SQLException {
+    void releaseUnknownPlateReturnsEmpty() {
         when(repo.findByNumberPlate("AREG-2")).thenReturn(Optional.empty());
 
         assertTrue(service.release("AREG-2").isEmpty());
-        verify(repo, never()).update(any());
+        verify(repo, never()).save(any());
     }
 
     @Test
-    void removeSlotDelegates() throws SQLException {
+    void removeSlotDelegates() {
         UUID id = UUID.randomUUID();
-        ParkingSlot slot = new ParkingSlot(id, SlotType.DISABLED);
-        when(repo.remove(id)).thenReturn(Optional.of(slot));
+        ParkingSlot slot = new ParkingSlot(SlotType.DISABLED);
+        when(repo.findById(id)).thenReturn(Optional.of(slot));
 
         assertTrue(service.removeSlot(id).isPresent());
-        verify(repo).remove(id);
+        verify(repo).delete(slot);
     }
 
     @Test
-    void findByTypeFilters() throws SQLException {
+    void findByTypeFilters() {
         List<ParkingSlot> regulars = List.of(
                 new ParkingSlot(SlotType.REGULAR),
                 new ParkingSlot(SlotType.REGULAR));

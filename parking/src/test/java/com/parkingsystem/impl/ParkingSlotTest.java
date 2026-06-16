@@ -1,7 +1,7 @@
-package main.com.parkingsystem.impl;
+package com.parkingsystem.impl;
 
-import main.com.parkingsystem.entity.ParkingSlot;
-import main.com.parkingsystem.helpers.SlotType;
+import com.parkingsystem.entity.ParkingSlot;
+import com.parkingsystem.helpers.SlotType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
