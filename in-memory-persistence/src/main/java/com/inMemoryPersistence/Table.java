@@ -1,4 +1,4 @@
-package main.com.inMemoryPersistence;
+package com.inMemoryPersistence;
 
 import java.util.*;
 import java.util.function.Consumer;

@@ -1,4 +1,4 @@
-package main.com.parkingsystem.helpers;
+package com.parkingsystem.helpers;
 
 /* 
     Created by anshanyan

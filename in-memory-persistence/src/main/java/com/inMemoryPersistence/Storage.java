@@ -1,4 +1,4 @@
-package main.com.inMemoryPersistence;
+package com.inMemoryPersistence;
 
 import java.util.HashMap;
 import java.util.Map;

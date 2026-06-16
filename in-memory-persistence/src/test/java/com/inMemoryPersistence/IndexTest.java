@@ -1,4 +1,4 @@
-package main.com.inMemoryPersistence;
+package com.inMemoryPersistence;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
