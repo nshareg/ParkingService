@@ -1,4 +1,4 @@
-package main.com.parkingApplication;
+package com.parkingApplication;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
