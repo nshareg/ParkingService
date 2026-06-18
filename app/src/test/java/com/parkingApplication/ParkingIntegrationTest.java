@@ -10,7 +10,9 @@ import com.parkingsystem.impl.ParkingSessionRepositoryimpl;
 import com.parkingsystem.entity.ParkingSession;
 
 import org.junit.jupiter.api.*;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -72,13 +74,14 @@ class ParkingIntegrationTest {
                 // already exist from an earlier run. Create them only if missing; the TRUNCATEs
                 // below guarantee a clean slate either way. (On Postgres both tables come from
                 // database/01-schema.sql at container startup, so no init() here.)
+                DataSource dataSource = new SingleConnectionDataSource(connection, true);
                 try {
-                    new ParkingRepositoryimpl(connection).init();
+                    new ParkingRepositoryimpl(dataSource).init();
                 } catch (SQLException alreadyInitialised) {
                     // table already exists — fine
                 }
                 try {
-                    new ParkingSessionRepositoryimpl(connection).init();
+                    new ParkingSessionRepositoryimpl(dataSource).init();
                 } catch (SQLException alreadyInitialised) {
                     // table already exists — fine
                 }
@@ -91,13 +94,14 @@ class ParkingIntegrationTest {
     @BeforeEach
     void setUp() throws SQLException {
         connection = openConnection();
-        ParkingRepositoryimpl slots = new ParkingRepositoryimpl(connection);
-        // The service delimits transactions on the Postgres connection; the in-memory engine
-        // has no transaction support, so it gets a null connection (the service then runs the
-        // repository calls directly, exactly as the old lock-free-but-untransacted path did).
-        Connection txConnection = USE_IN_MEMORY ? null : connection;
-        service = new ParkingServiceImpl(txConnection, slots);
-        sessionService = new ParkingServiceImpl(txConnection, slots, new ParkingSessionRepositoryimpl(connection));
+        // Repositories borrow their connection from a DataSource via DataSourceUtils; wrapping
+        // the single test connection (close-suppressed) keeps every call on the same connection
+        // for the test's lifetime. Transactions are now declared with @Transactional on the
+        // service — here we drive the repositories directly against this one connection.
+        DataSource dataSource = new SingleConnectionDataSource(connection, true);
+        ParkingRepositoryimpl slots = new ParkingRepositoryimpl(dataSource);
+        service = new ParkingServiceImpl(slots, null);
+        sessionService = new ParkingServiceImpl(slots, new ParkingSessionRepositoryimpl(dataSource));
     }
 
     @AfterEach
@@ -239,7 +243,8 @@ class ParkingIntegrationTest {
                 ready.countDown();
                 go.await();                       // release every thread at the same instant
                 try (Connection c = openConnection()) {
-                    ParkingService s = new ParkingServiceImpl(c, new ParkingRepositoryimpl(c));
+                    DataSource ds = new SingleConnectionDataSource(c, true);
+                    ParkingService s = new ParkingServiceImpl(new ParkingRepositoryimpl(ds), null);
                     return s.park("THREAD-" + index);
                 }
             }));
@@ -461,7 +466,8 @@ class ParkingIntegrationTest {
                 ready.countDown();
                 go.await();
                 try (Connection c = openConnection()) {
-                    ParkingService s = new ParkingServiceImpl(c, new ParkingRepositoryimpl(c));
+                    DataSource ds = new SingleConnectionDataSource(c, true);
+                    ParkingService s = new ParkingServiceImpl(new ParkingRepositoryimpl(ds), null);
                     return s.release("CON-PLATE");
                 }
             }));

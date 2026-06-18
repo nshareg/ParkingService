@@ -8,7 +8,9 @@ import com.parkingsystem.impl.ParkingSessionRepositoryimpl;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -26,7 +28,10 @@ class IsolationLevelTest {
             c.setTransactionIsolation(isolation);
             c.setAutoCommit(false);
 
-            ParkingRepositoryimpl slots = new ParkingRepositoryimpl(c);
+            // Repositories borrow their connection from a DataSource; wrap this thread's
+            // connection (close-suppressed) so the manually-set isolation + commit/rollback apply.
+            DataSource ds = new SingleConnectionDataSource(c, true);
+            ParkingRepositoryimpl slots = new ParkingRepositoryimpl(ds);
             List<ParkingSlot> free = slots.findAllFree();
 
             raceLatch.countDown();
@@ -40,7 +45,7 @@ class IsolationLevelTest {
             ParkingSlot slot = free.get(0);
             slot.book(plate);
             slots.update(slot);
-            new ParkingSessionRepositoryimpl(c).add(new ParkingSession(slot.getSlotID(), plate));
+            new ParkingSessionRepositoryimpl(ds).add(new ParkingSession(slot.getSlotID(), plate));
             c.commit();
             return true;
         } catch (Exception e) {
@@ -53,7 +58,8 @@ class IsolationLevelTest {
     private long race(int isolation) throws Exception {
         try (Connection c = AcidTestDB.openConnection()) {
             AcidTestDB.truncateParkingTables(c);
-            new ParkingRepositoryimpl(c).add(new ParkingSlot(SlotType.REGULAR));
+            new ParkingRepositoryimpl(new SingleConnectionDataSource(c, true))
+                    .add(new ParkingSlot(SlotType.REGULAR));
         }
 
         CountDownLatch raceLatch = new CountDownLatch(2);

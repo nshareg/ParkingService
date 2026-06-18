@@ -87,7 +87,7 @@ class ParkingServiceImplSessionTest {
     void legacyConstructorRecordsNoSessionsAndHistoryIsEmpty() throws SQLException {
         ParkingSlot free = new ParkingSlot(SlotType.REGULAR);
         when(repo.findAllFree()).thenReturn(List.of(free));
-        ParkingServiceImpl service = new ParkingServiceImpl(repo); // single-arg, no session repo
+        ParkingServiceImpl service = new ParkingServiceImpl(repo, null); // no session repo
 
         assertTrue(service.park("AREG-1").isPresent());
         verify(repo).update(free);

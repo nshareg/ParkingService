@@ -9,6 +9,7 @@ import com.parkingsystem.impl.ParkingServiceImpl;
 import com.parkingsystem.impl.ParkingSessionRepositoryimpl;
 
 import org.h2.tools.RunScript;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -70,8 +72,12 @@ class ParkingEmbeddedDbIntegrationTest {
         runScript("/db/seed.sql");
         connection.setAutoCommit(false);
 
-        slotRepo = new ParkingRepositoryimpl(connection);
-        sessionRepo = new ParkingSessionRepositoryimpl(connection);
+        // Repositories now borrow their connection from a DataSource via DataSourceUtils.
+        // Wrap the single test connection (close-suppressed) so every repository call runs on
+        // it, keeping the manual-commit-off + per-test rollback isolation intact.
+        DataSource dataSource = new SingleConnectionDataSource(connection, true);
+        slotRepo = new ParkingRepositoryimpl(dataSource);
+        sessionRepo = new ParkingSessionRepositoryimpl(dataSource);
         service = new ParkingServiceImpl(slotRepo, sessionRepo);
     }
 

@@ -8,7 +8,9 @@ import com.parkingsystem.impl.ParkingServiceImpl;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -42,8 +44,9 @@ class ConnectionPoolPerformanceTest {
                 try {
                     start.await();
                     try (Connection conn = Database.getConnection()) {
+                        DataSource ds = new SingleConnectionDataSource(conn, true);
                         ParkingService service =
-                                new ParkingServiceImpl(conn, new ParkingRepositoryimpl(conn));
+                                new ParkingServiceImpl(new ParkingRepositoryimpl(ds), null);
                         ParkingSlot slot = service.addSlot(SlotType.REGULAR);
                         service.removeSlot(slot.getSlotID());
                     }

@@ -12,7 +12,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.UUID;
@@ -30,11 +32,15 @@ class ConsistencyBreakTest {
     private static final String PLATE = "TEST-OPEL";
 
     private Connection conn;
+    private DataSource dataSource;
 
     @BeforeEach
     void setUp() throws SQLException {
         conn = AcidTestDB.openConnection();
         AcidTestDB.truncateParkingTables(conn);
+        // The repositories borrow their connection from a DataSource; wrap the single test
+        // connection (close-suppressed) so the manual commit/rollback below still governs them.
+        dataSource = new SingleConnectionDataSource(conn, true);
     }
 
     @AfterEach
@@ -45,7 +51,7 @@ class ConsistencyBreakTest {
 
     private UUID freshFreeSlot() throws SQLException {
         ParkingSlot slot = new ParkingSlot(SlotType.REGULAR);
-        new ParkingRepositoryimpl(conn).add(slot);
+        new ParkingRepositoryimpl(dataSource).add(slot);
         return slot.getSlotID();
     }
 
@@ -54,8 +60,8 @@ class ConsistencyBreakTest {
     }
 
     private void parkWithCrashBetweenWrites(boolean transactional, UUID slotId) throws SQLException {
-        ParkingRepositoryimpl slots = new ParkingRepositoryimpl(conn);
-        ParkingSessionRepositoryimpl sessions = new ParkingSessionRepositoryimpl(conn);
+        ParkingRepositoryimpl slots = new ParkingRepositoryimpl(dataSource);
+        ParkingSessionRepositoryimpl sessions = new ParkingSessionRepositoryimpl(dataSource);
 
         if (transactional) conn.setAutoCommit(false);
         try {
@@ -75,11 +81,11 @@ class ConsistencyBreakTest {
     }
 
     private boolean slotIsBooked(UUID slotId) throws SQLException {
-        return new ParkingRepositoryimpl(conn).findById(slotId).orElseThrow().isBooked();
+        return new ParkingRepositoryimpl(dataSource).findById(slotId).orElseThrow().isBooked();
     }
 
     private long activeSessionsFor(UUID slotId) throws SQLException {
-        return new ParkingSessionRepositoryimpl(conn).findBySlot(slotId).stream()
+        return new ParkingSessionRepositoryimpl(dataSource).findBySlot(slotId).stream()
                 .filter(ParkingSession::isActive)
                 .count();
     }

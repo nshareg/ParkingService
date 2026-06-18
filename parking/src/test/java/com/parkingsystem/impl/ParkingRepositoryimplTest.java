@@ -8,6 +8,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -24,6 +25,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ParkingRepositoryimplTest {
 
+    @Mock private DataSource dataSource;
     @Mock private Connection connection;
     @Mock private PreparedStatement ps;
     @Mock private ResultSet rs;
@@ -32,8 +34,9 @@ class ParkingRepositoryimplTest {
 
     @BeforeEach
     void setUp() throws SQLException {
+        when(dataSource.getConnection()).thenReturn(connection);
         when(connection.prepareStatement(anyString())).thenReturn(ps);
-        repo = new ParkingRepositoryimpl(connection);
+        repo = new ParkingRepositoryimpl(dataSource);
     }
 
     @Test

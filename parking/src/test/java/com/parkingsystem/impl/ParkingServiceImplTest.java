@@ -28,7 +28,7 @@ class ParkingServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new ParkingServiceImpl(repo);
+        service = new ParkingServiceImpl(repo, null);
     }
 
     @Test
