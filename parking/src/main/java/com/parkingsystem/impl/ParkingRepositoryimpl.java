@@ -3,7 +3,10 @@ package com.parkingsystem.impl;
 import com.parkingsystem.contract.ParkingRepository;
 import com.parkingsystem.entity.ParkingSlot;
 import com.parkingsystem.helpers.SlotType;
+import org.springframework.jdbc.datasource.DataSourceUtils;
+import org.springframework.stereotype.Component;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -18,36 +21,44 @@ import java.util.UUID;
     on 25.05.26
 */
 public class ParkingRepositoryimpl implements ParkingRepository {
-    private Connection connection;
+    private final DataSource dataSource;
 
-    public ParkingRepositoryimpl(Connection connection){
-        this.connection = connection;
+    public ParkingRepositoryimpl(DataSource dataSource){
+        this.dataSource = dataSource;
     }
 
     @Override
     public void init() throws SQLException {
-        PreparedStatement createTable = connection.prepareStatement(
-                "CREATE TABLE slots (slot_id, type, booked, number_plate)");
-        createTable.executeUpdate();
-
-        PreparedStatement indexBySlotId = connection.prepareStatement(
-                "ALTER TABLE slots ADD INDEX (slot_id)");
-        indexBySlotId.executeUpdate();
-
-        PreparedStatement indexByNumberPlate = connection.prepareStatement(
-                "ALTER TABLE slots ADD INDEX (number_plate)");
-        indexByNumberPlate.executeUpdate();
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try (PreparedStatement createTable = connection.prepareStatement(
+                "CREATE TABLE slots (slot_id, type, booked, number_plate)")) {
+            createTable.executeUpdate();
+        }
+        try (PreparedStatement indexBySlotId = connection.prepareStatement(
+                "ALTER TABLE slots ADD INDEX (slot_id)")) {
+            indexBySlotId.executeUpdate();
+        }
+        try (PreparedStatement indexByNumberPlate = connection.prepareStatement(
+                "ALTER TABLE slots ADD INDEX (number_plate)")) {
+            indexByNumberPlate.executeUpdate();
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+        }
     }
 
     @Override
     public void add(ParkingSlot parkingSlot) throws SQLException {
-        PreparedStatement ps = connection.prepareStatement(
-                "INSERT INTO slots (slot_id, type, booked, number_plate) VALUES (?, ?, ?, ?)");
-        ps.setObject(1, parkingSlot.getSlotID());
-        ps.setString(2, parkingSlot.getType().name());
-        ps.setBoolean(3, parkingSlot.isBooked());
-        ps.setString(4, parkingSlot.getNumberPlate());
-        ps.executeUpdate();
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try (PreparedStatement ps = connection.prepareStatement(
+                "INSERT INTO slots (slot_id, type, booked, number_plate) VALUES (?, ?, ?, ?)")) {
+            ps.setObject(1, parkingSlot.getSlotID());
+            ps.setString(2, parkingSlot.getType().name());
+            ps.setBoolean(3, parkingSlot.isBooked());
+            ps.setString(4, parkingSlot.getNumberPlate());
+            ps.executeUpdate();
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+        }
     }
 
     @Override
@@ -56,11 +67,15 @@ public class ParkingRepositoryimpl implements ParkingRepository {
         if (found.isEmpty()) {
             throw new SQLException("no slot with id: " + id);
         }
-        PreparedStatement ps = connection.prepareStatement(
-                "DELETE FROM slots WHERE slot_id = ?");
-        ps.setObject(1, id);
-        ps.executeUpdate();
-        return found;
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM slots WHERE slot_id = ?")) {
+            ps.setObject(1, id);
+            ps.executeUpdate();
+            return found;
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+        }
     }
 
     @Override
@@ -69,61 +84,74 @@ public class ParkingRepositoryimpl implements ParkingRepository {
         if (found.isEmpty()) {
             throw new SQLException("no slot with id: " + slot.getSlotID());
         }
-        PreparedStatement ps = connection.prepareStatement(
-                "UPDATE slots SET type = ?, booked = ?, number_plate = ? WHERE slot_id = ?");
-        ps.setString(1, slot.getType().name());
-        ps.setBoolean(2, slot.isBooked());
-        ps.setString(3, slot.getNumberPlate());
-        ps.setObject(4, slot.getSlotID());
-        ps.executeUpdate();
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try (PreparedStatement ps = connection.prepareStatement(
+                "UPDATE slots SET type = ?, booked = ?, number_plate = ? WHERE slot_id = ?")) {
+            ps.setString(1, slot.getType().name());
+            ps.setBoolean(2, slot.isBooked());
+            ps.setString(3, slot.getNumberPlate());
+            ps.setObject(4, slot.getSlotID());
+            ps.executeUpdate();
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+        }
     }
 
     @Override
     public Optional<ParkingSlot> findById(UUID id) throws SQLException{
-        PreparedStatement ps = connection.prepareStatement(
-                "SELECT * FROM slots WHERE slot_id = ?");
-        ps.setObject(1, id);
-        ResultSet rs = ps.executeQuery();
-        return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT * FROM slots WHERE slot_id = ?")) {
+            ps.setObject(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+        }
     }
 
     @Override
     public List<ParkingSlot> findAll() throws SQLException{
-        PreparedStatement ps = connection.prepareStatement(
-                "SELECT * FROM slots");
-        return collectAll(ps.executeQuery());
+        return query("SELECT * FROM slots");
     }
 
     @Override
     public List<ParkingSlot> findAllFree() throws SQLException{
-        PreparedStatement ps = connection.prepareStatement(
-                "SELECT * FROM slots WHERE booked = false");
-        return collectAll(ps.executeQuery());
+        return query("SELECT * FROM slots WHERE booked = false");
     }
 
     @Override
     public List<ParkingSlot> findAllBooked() throws SQLException{
-        PreparedStatement ps = connection.prepareStatement(
-                "SELECT * FROM slots WHERE booked = true");
-        return collectAll(ps.executeQuery());
+        return query("SELECT * FROM slots WHERE booked = true");
     }
 
     @Override
     public List<ParkingSlot> findByType(SlotType type) throws SQLException{
-        PreparedStatement ps = connection.prepareStatement(
-                "SELECT * FROM slots WHERE type = ?"
-        );
-        ps.setObject(1, type.name());
-        return collectAll(ps.executeQuery());
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT * FROM slots WHERE type = ?")) {
+            ps.setObject(1, type.name());
+            try (ResultSet rs = ps.executeQuery()) {
+                return collectAll(rs);
+            }
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+        }
     }
 
     @Override
     public Optional<ParkingSlot> findByNumberPlate(String numberPlate) throws SQLException{
-        PreparedStatement ps = connection.prepareStatement(
-                "SELECT * FROM slots WHERE number_plate = ?");
-        ps.setString(1, numberPlate);
-        ResultSet rs = ps.executeQuery();
-        return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT * FROM slots WHERE number_plate = ?")) {
+            ps.setString(1, numberPlate);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+        }
     }
 
     @Override
@@ -139,6 +167,16 @@ public class ParkingRepositoryimpl implements ParkingRepository {
     @Override
     public int countBooked() throws SQLException{
         return findAllBooked().size();
+    }
+
+    private List<ParkingSlot> query(String sql) throws SQLException {
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try (PreparedStatement ps = connection.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            return collectAll(rs);
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+        }
     }
 
     private ParkingSlot mapRow(ResultSet rs) throws SQLException {

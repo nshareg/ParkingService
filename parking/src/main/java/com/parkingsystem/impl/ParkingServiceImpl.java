@@ -7,8 +7,10 @@ import com.parkingsystem.contract.ParkingSessionRepository;
 import com.parkingsystem.entity.ParkingSession;
 import com.parkingsystem.entity.ParkingSlot;
 import com.parkingsystem.helpers.SlotType;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
@@ -18,128 +20,74 @@ import java.util.UUID;
     Created by anshanyan
     on 23.05.26
 */
+@RequiredArgsConstructor
 public class ParkingServiceImpl implements ParkingService {
 
     private final ParkingRepository repository;
-    //junction table
     private final ParkingSessionRepository sessionRepository;
 
-    private final Connection connection;
-
-    /** Action over the repositories that may fail with a {@link SQLException}. */
-    @FunctionalInterface
-    private interface SqlAction<T> {
-        T run() throws SQLException;
-    }
-
-    public ParkingServiceImpl(ParkingRepository repository) {
-        this(null, repository, null);
-    }
-
-    public ParkingServiceImpl(ParkingRepository repository, ParkingSessionRepository sessionRepository) {
-        this(null, repository, sessionRepository);
-    }
-
-    public ParkingServiceImpl(Connection connection, ParkingRepository repository) {
-        this(connection, repository, null);
-    }
-
-    public ParkingServiceImpl(Connection connection,
-                              ParkingRepository repository,
-                              ParkingSessionRepository sessionRepository) {
-        this.connection = connection;
-        this.repository = repository;
-        this.sessionRepository = sessionRepository;
-    }
-
-    /**
-     * Runs {@code action} as a single atomic transaction: everything commits together or, on any
-     * failure, nothing does (rollback). When there is no usable connection the action just runs
-     * as-is (no-op transaction), so mock and in-memory callers behave exactly as before.
-     */
-    private <T> T inTransaction(SqlAction<T> action) throws SQLException {
-        if (connection == null) {
-            return action.run();
-        }
-        boolean previousAutoCommit = connection.getAutoCommit();
-        connection.setAutoCommit(false);
-        try {
-            T result = action.run();
-            connection.commit();
-            return result;
-        } catch (SQLException | RuntimeException e) {
-            connection.rollback();
-            throw e;
-        } finally {
-            connection.setAutoCommit(previousAutoCommit);
-        }
-    }
-
     @Override
+    @Transactional(rollbackFor = SQLException.class)
     public void init() throws SQLException {
-        inTransaction(() -> {
-            repository.init();
-            if (sessionRepository != null) {
-                sessionRepository.init();
-            }
-            return null;
-        });
+        repository.init();
+        if (sessionRepository != null) {
+            sessionRepository.init();
+        }
     }
 
     @Override
+    @Transactional(rollbackFor = SQLException.class)
     public ParkingSlot addSlot(@NonNull SlotType type) throws SQLException {
-        return inTransaction(() -> {
-            ParkingSlot slot = new ParkingSlot(type);
-            repository.add(slot);
-            return slot;
-        });
+        ParkingSlot slot = new ParkingSlot(type);
+        repository.add(slot);
+        return slot;
     }
 
     @Override
+    @Transactional(rollbackFor = SQLException.class)
     public Optional<ParkingSlot> removeSlot(@NonNull UUID id) throws SQLException {
-        return inTransaction(() -> repository.remove(id));
+        return repository.remove(id);
     }
 
     @Override
+    @Transactional(rollbackFor = SQLException.class)
     public Optional<ParkingSlot> park(@NonNull String numberPlate) throws SQLException {
         return park(numberPlate, SlotType.REGULAR);
     }
 
     @Override
+    @Transactional(rollbackFor = SQLException.class)
     public Optional<ParkingSlot> park(@NonNull String numberPlate, @NonNull SlotType slotType) throws SQLException {
-        return inTransaction(() -> {
-            Optional<ParkingSlot> free = repository.findAllFree().stream()
-                    .filter(x -> x.getType().equals(slotType))
-                    .findFirst();
-            if (free.isEmpty() || repository.findByNumberPlate(numberPlate).isPresent()) return Optional.empty();
-            ParkingSlot slot = free.get();
-            slot.book(numberPlate);
-            repository.update(slot);
-            if (sessionRepository != null) {
-                sessionRepository.add(new ParkingSession(slot.getSlotID(), numberPlate));
-            }
-            return Optional.of(slot);
-        });
+        Optional<ParkingSlot> free = repository.findAllFree().stream()
+                .filter(x -> x.getType().equals(slotType))
+                .findFirst();
+        if (free.isEmpty() || repository.findByNumberPlate(numberPlate).isPresent()) return Optional.empty();
+        ParkingSlot slot = free.get();
+        slot.book(numberPlate);
+        repository.update(slot);
+        if (sessionRepository != null) {
+            sessionRepository.add(new ParkingSession(slot.getSlotID(), numberPlate));
+        }
+        return Optional.of(slot);
     }
 
     @Override
+    @Transactional(rollbackFor = SQLException.class)
     public Optional<ParkingSlot> release(@NonNull String numberPlate) throws SQLException {
-        return inTransaction(() -> {
-            Optional<ParkingSlot> found = repository.findByNumberPlate(numberPlate);
-            if (found.isEmpty()) return Optional.empty();
-            ParkingSlot slot = found.get();
-            slot.release();
-            repository.update(slot);
-            if (sessionRepository != null) {
-                Optional<ParkingSession> open = sessionRepository.findActiveByNumberPlate(numberPlate);
-                if (open.isPresent()) {
-                    ParkingSession session = open.get();
-                    session.close();
-                    sessionRepository.update(session);
-                }
+        Optional<ParkingSlot> found = repository.findByNumberPlate(numberPlate);
+        if (found.isEmpty()) return Optional.empty();
+        ParkingSlot slot = found.get();
+        slot.release();
+        repository.update(slot);
+        if (sessionRepository != null) {
+            Optional<ParkingSession> open = sessionRepository.findActiveByNumberPlate(numberPlate);
+            if (open.isPresent()) {
+                ParkingSession session = open.get();
+                session.close();
+                sessionRepository.update(session);
             }
-            return Optional.of(slot);
-        });
+        }
+        return Optional.of(slot);
     }
 
     @Override
