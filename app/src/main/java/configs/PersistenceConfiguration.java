@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
-import org.springframework.beans.factory.annotation.Value;
 
 import javax.sql.DataSource;
 
@@ -19,15 +18,11 @@ import javax.sql.DataSource;
 @EnableTransactionManagement
 public class PersistenceConfiguration {
     @Bean
-    public DataSource dataSource(
-            @Value("${spring.datasource.url}") String url,
-            @Value("${spring.datasource.username}") String username,
-            @Value("${spring.datasource.password}")  String password
-    ){
+    public DataSource dataSource(DBproperties dBproperties){
         HikariConfig config = new HikariConfig();
-        config.setJdbcUrl(url);
-        config.setUsername(username);
-        config.setPassword(password);
+        config.setJdbcUrl(dBproperties.getUrl());
+        config.setUsername(dBproperties.getUsername());
+        config.setPassword(dBproperties.getPassword());
         return new HikariDataSource(config);
     }
     @Bean
