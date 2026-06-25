@@ -15,10 +15,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/*
-    Created by anshanyan
-    on 23.05.26
-*/
 @Service
 @RequiredArgsConstructor
 public class ParkingServiceImpl implements ParkingService {
@@ -38,7 +34,17 @@ public class ParkingServiceImpl implements ParkingService {
     @Transactional
     public Optional<ParkingSlot> removeSlot(@NonNull UUID id) {
         Optional<ParkingSlot> found = repository.findById(id);
-        found.ifPresent(repository::delete);
+
+        if (found.isPresent()) {
+            List<ParkingSession> attachedSessions = sessionRepository.findBySlotId(id);
+            if (!attachedSessions.isEmpty()) {
+                throw new org.springframework.dao.DataIntegrityViolationException(
+                        "Cannot delete slot " + id + " because it has attached parking sessions."
+                );
+            }
+            repository.delete(found.get());
+            repository.flush();
+        }
         return found;
     }
 
@@ -60,7 +66,7 @@ public class ParkingServiceImpl implements ParkingService {
         ParkingSlot slot = free.get();
         slot.book(numberPlate);
         repository.save(slot);
-        sessionRepository.save(new ParkingSession(slot.getSlotID(), numberPlate));
+        sessionRepository.save(new ParkingSession(slot, numberPlate));
         return Optional.of(slot);
     }
 

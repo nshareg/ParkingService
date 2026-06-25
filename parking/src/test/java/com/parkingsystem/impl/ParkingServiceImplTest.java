@@ -1,36 +1,51 @@
 package com.parkingsystem.impl;
 
 import com.parkingsystem.contract.ParkingRepository;
+import com.parkingsystem.contract.ParkingService;
 import com.parkingsystem.contract.ParkingSessionRepository;
+import com.parkingsystem.entity.ParkingSession;
 import com.parkingsystem.entity.ParkingSlot;
 import com.parkingsystem.helpers.SlotType;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-/*
-    Created by anshanyan
-    on 27.05.26
-*/
-@ExtendWith(MockitoExtension.class)
+
+@ExtendWith(SpringExtension.class)
+@Import(ParkingServiceImpl.class)
 class ParkingServiceImplTest {
 
-    @Mock private ParkingRepository repo;
-    @Mock private ParkingSessionRepository sessionRepo;
-    private ParkingServiceImpl service;
+    @MockitoBean
+    private ParkingRepository repo;
+
+    @MockitoBean
+    private ParkingSessionRepository sessionRepo;
+
+    @Autowired
+    private ParkingService service;
 
     @BeforeEach
-    void setUp() {
-        service = new ParkingServiceImpl(repo, sessionRepo);
+    void stubSaveToReturnArgument() {
+        // JpaRepository.save() returns the persisted entity.
+        // Without this stub the mock returns null, which breaks service logic
+        // that passes the returned value back to the caller.
+        when(repo.save(any(ParkingSlot.class))).thenAnswer(i -> i.getArgument(0));
+        when(sessionRepo.save(any(ParkingSession.class))).thenAnswer(i -> i.getArgument(0));
     }
+
+    // ── addSlot ──────────────────────────────────────────────────────────────
 
     @Test
     void addSlotPersists() {
@@ -42,10 +57,14 @@ class ParkingServiceImplTest {
         verify(repo).save(slot);
     }
 
+    // ── park ─────────────────────────────────────────────────────────────────
+
     @Test
     void parkAssignsFreeSlot() {
         ParkingSlot free = new ParkingSlot(SlotType.REGULAR);
         when(repo.findByBookedFalse()).thenReturn(List.of(free));
+        // plate not yet parked → no duplicate
+        when(repo.findByNumberPlate("AREG-1")).thenReturn(Optional.empty());
 
         Optional<ParkingSlot> parked = service.park("AREG-1");
 
@@ -53,40 +72,65 @@ class ParkingServiceImplTest {
         assertTrue(parked.get().isBooked());
         assertEquals("AREG-1", parked.get().getNumberPlate());
         verify(repo).save(free);
+        verify(sessionRepo).save(any(ParkingSession.class));
     }
 
     @Test
     void parkSelectsMatchingType() {
-        ParkingSlot regular = new ParkingSlot(SlotType.REGULAR);
+        ParkingSlot regular  = new ParkingSlot(SlotType.REGULAR);
         ParkingSlot electric = new ParkingSlot(SlotType.ELECTRIC);
         when(repo.findByBookedFalse()).thenReturn(List.of(regular, electric));
+        when(repo.findByNumberPlate("AREG-1")).thenReturn(Optional.empty());
 
         Optional<ParkingSlot> parked = service.park("AREG-1", SlotType.ELECTRIC);
 
         assertTrue(parked.isPresent());
         assertEquals(SlotType.ELECTRIC, parked.get().getType());
         verify(repo).save(electric);
+        verify(repo, never()).save(regular);
     }
 
     @Test
-    void parkReturnsEmptyWhenFull() {
+    void parkReturnsEmptyWhenNoFreeSlotOfType() {
         when(repo.findByBookedFalse()).thenReturn(List.of());
 
         assertTrue(service.park("AREG-1").isEmpty());
         verify(repo, never()).save(any());
+        verify(sessionRepo, never()).save(any());
     }
+
+    @Test
+    void parkReturnsEmptyWhenPlateAlreadyParked() {
+        ParkingSlot free   = new ParkingSlot(SlotType.REGULAR);
+        ParkingSlot booked = new ParkingSlot(SlotType.REGULAR);
+        booked.book("DUP-1");
+        when(repo.findByBookedFalse()).thenReturn(List.of(free));
+        // plate is already in an active slot → duplicate guard triggers
+        when(repo.findByNumberPlate("DUP-1")).thenReturn(Optional.of(booked));
+
+        assertTrue(service.park("DUP-1").isEmpty());
+        verify(repo, never()).save(any());
+        verify(sessionRepo, never()).save(any());
+    }
+
+    // ── release ──────────────────────────────────────────────────────────────
 
     @Test
     void releaseUnbooksSlot() {
         ParkingSlot booked = new ParkingSlot(SlotType.REGULAR);
         booked.book("AREG-1");
+        ParkingSession activeSession = new ParkingSession(booked, "AREG-1");
         when(repo.findByNumberPlate("AREG-1")).thenReturn(Optional.of(booked));
+        when(sessionRepo.findByActiveTrueAndNumberPlate("AREG-1"))
+                .thenReturn(Optional.of(activeSession));
 
         Optional<ParkingSlot> released = service.release("AREG-1");
 
         assertTrue(released.isPresent());
         assertFalse(released.get().isBooked());
         verify(repo).save(booked);
+        verify(sessionRepo).save(activeSession);
+        assertFalse(activeSession.isActive(), "session must be closed after release");
     }
 
     @Test
@@ -95,17 +139,35 @@ class ParkingServiceImplTest {
 
         assertTrue(service.release("AREG-2").isEmpty());
         verify(repo, never()).save(any());
+        verify(sessionRepo, never()).save(any());
     }
 
+    // ── removeSlot ───────────────────────────────────────────────────────────
+
     @Test
-    void removeSlotDelegates() {
-        UUID id = UUID.randomUUID();
+    void removeSlotReturnsSlotAndDelegatesDelete() {
+        UUID id   = UUID.randomUUID();
         ParkingSlot slot = new ParkingSlot(SlotType.DISABLED);
         when(repo.findById(id)).thenReturn(Optional.of(slot));
 
-        assertTrue(service.removeSlot(id).isPresent());
+        Optional<ParkingSlot> removed = service.removeSlot(id);
+
+        assertTrue(removed.isPresent());
         verify(repo).delete(slot);
     }
+
+    @Test
+    void removeSlot_unknownId_returnsEmpty() {
+        UUID id = UUID.randomUUID();
+        when(repo.findById(id)).thenReturn(Optional.empty());
+
+        Optional<ParkingSlot> removed = service.removeSlot(id);
+
+        assertTrue(removed.isEmpty());
+        verify(repo, never()).delete(any());
+    }
+
+    // ── findByType ───────────────────────────────────────────────────────────
 
     @Test
     void findByTypeFilters() {

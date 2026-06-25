@@ -13,7 +13,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -47,7 +46,7 @@ class ParkingServiceImplSessionTest {
     void releaseClosesActiveSession() {
         ParkingSlot booked = new ParkingSlot(SlotType.REGULAR);
         booked.book("AREG-1");
-        ParkingSession open = new ParkingSession(booked.getSlotID(), "AREG-1");
+        ParkingSession open = new ParkingSession(booked, "AREG-1");
         when(repo.findByNumberPlate("AREG-1")).thenReturn(Optional.of(booked));
         when(sessionRepo.findByActiveTrueAndNumberPlate("AREG-1")).thenReturn(Optional.of(open));
         ParkingServiceImpl service = new ParkingServiceImpl(repo, sessionRepo);
@@ -70,14 +69,17 @@ class ParkingServiceImplSessionTest {
 
     @Test
     void historyMethodsDelegateToSessionRepository() {
-        UUID slotId = UUID.randomUUID();
-        ParkingSession s = new ParkingSession(slotId, "AREG-1");
-        when(sessionRepo.findBySlotId(slotId)).thenReturn(List.of(s));
+        ParkingSlot slot = new ParkingSlot(SlotType.REGULAR);
+
+        ParkingSession s = new ParkingSession(slot, "AREG-1");
+
+        when(sessionRepo.findBySlotId(slot.getSlotID())).thenReturn(List.of(s));
         when(sessionRepo.findByNumberPlate("AREG-1")).thenReturn(List.of(s));
         when(sessionRepo.findAll()).thenReturn(List.of(s));
+
         ParkingServiceImpl service = new ParkingServiceImpl(repo, sessionRepo);
 
-        assertEquals(1, service.slotHistory(slotId).size());
+        assertEquals(1, service.slotHistory(slot.getSlotID()).size());
         assertEquals(1, service.plateHistory("AREG-1").size());
         assertEquals(1, service.allSessions().size());
     }
