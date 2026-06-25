@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * commit it (so threads can see it), and clean up with @Sql.
  */
 @SpringBootTest
-@ActiveProfiles("prod")
+@ActiveProfiles("dev")
 @Transactional
 @TestMethodOrder(MethodOrderer.DisplayName.class)
 class ParkingIntegrationTest {
