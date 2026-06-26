@@ -1,19 +1,17 @@
 package com.parkingApplication;
 
+import com.parkingsystem.contract.ParkingRepository;
 import com.parkingsystem.contract.ParkingService;
+import com.parkingsystem.contract.ParkingSessionRepository;
 import com.parkingsystem.entity.ParkingSession;
 import com.parkingsystem.entity.ParkingSlot;
 import com.parkingsystem.helpers.SlotType;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,10 +41,13 @@ import static org.junit.jupiter.api.Assertions.*;
  * commit it (so threads can see it), and clean up with @Sql.
  */
 @SpringBootTest
-@ActiveProfiles("dev")
-@Transactional
-@TestMethodOrder(MethodOrderer.DisplayName.class)
+@ActiveProfiles("dev")//DO NOT RUN ON PROD, WILL WIPE THE DATA
 class ParkingIntegrationTest {
+    @Autowired
+    private ParkingRepository parkingRepository;
+
+    @Autowired
+    private ParkingSessionRepository sessionRepository;
 
     @Autowired
     private ParkingService service;
@@ -54,6 +55,13 @@ class ParkingIntegrationTest {
     // ════════════════════════════════════════════════════════════════
     // SECTION A — HAPPY PATH TESTS
     // ════════════════════════════════════════════════════════════════
+
+
+    @BeforeEach
+    void cleanDatabase() {
+        sessionRepository.deleteAll();
+        parkingRepository.deleteAll();
+    }
 
     @Test
     @DisplayName("A01. addSlot_regular_increasesCount")
@@ -164,21 +172,6 @@ class ParkingIntegrationTest {
         assertEquals(1, service.countBooked());
     }
 
-    /*
-     * A10 — concurrency test.
-     *
-     * This test is NOT wrapped in a transaction (propagation = NOT_SUPPORTED would
-     * be needed but is not annotated here; the @Transactional on the class still
-     * applies, but each spawned thread creates its own transaction context,
-     * independent of the parent thread's transaction).
-     *
-     * Data inserted by the parent transaction is NOT visible to child threads
-     * until committed.  Because of this, a concurrency test in a @Transactional
-     * class must flush and verify state only within the same thread.
-     *
-     * The assertion below validates that after all threads complete, the
-     * single-slot invariant holds from the perspective of the main thread.
-     */
     @Test
     @DisplayName("A10. concurrency_parallelParks_leaveConsistentState")
     void a10_concurrency_parallelParks_leaveConsistentState() throws Exception {
@@ -206,13 +199,30 @@ class ParkingIntegrationTest {
             assertTrue(pool.awaitTermination(15, TimeUnit.SECONDS));
         }
 
-        for (Future<Optional<ParkingSlot>> f : futures) f.get();
+        int successfulParks = 0;
+        int failedParks = 0;
 
-        assertEquals(1, service.count());
-        assertEquals(1, service.countBooked());
-        assertEquals(0, service.countFree());
+        for (Future<Optional<ParkingSlot>> f : futures) {
+            Optional<ParkingSlot> result = f.get();
+            if (result.isPresent()) {
+                successfulParks++;
+            } else {
+                failedParks++;
+            }
+        }
+
+        assertEquals(1, successfulParks, "Only one thread should successfully park");
+        assertEquals(threads - 1, failedParks, "Nine threads should fail to park and return empty");
+
+        assertEquals(1, service.count(), "Total slots must remain 1");
+        assertEquals(1, service.countBooked(), "Booked slots must be 1");
+        assertEquals(0, service.countFree(), "Free slots must be 0");
+
+        long activeSessions = service.allSessions().stream()
+                .filter(ParkingSession::isActive)
+                .count();
+        assertEquals(1, activeSessions, "There must be exactly one active parking session generated");
     }
-
     // ════════════════════════════════════════════════════════════════
     // SECTION B — FAILURE / EDGE CASE TESTS
     // ════════════════════════════════════════════════════════════════

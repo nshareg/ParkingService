@@ -57,10 +57,13 @@ public class ParkingServiceImpl implements ParkingService {
     @Override
     @Transactional
     public Optional<ParkingSlot> park(@NonNull String numberPlate, @NonNull SlotType slotType) {
-        Optional<ParkingSlot> free = repository.findByBookedFalse().stream()
-                .filter(slot -> slot.getType() == slotType)
-                .findFirst();
-        if (free.isEmpty() || repository.findByNumberPlate(numberPlate).isPresent()) {
+        if (repository.findByNumberPlate(numberPlate).isPresent()) {
+            return Optional.empty();
+        }
+
+        Optional<ParkingSlot> free = repository.findFirstByTypeAndBookedFalse(slotType);
+
+        if (free.isEmpty()) {
             return Optional.empty();
         }
         ParkingSlot slot = free.get();
