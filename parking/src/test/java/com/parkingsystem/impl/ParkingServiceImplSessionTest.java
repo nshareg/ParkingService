@@ -29,7 +29,7 @@ class ParkingServiceImplSessionTest {
     @Test
     void parkOpensSessionLinkingSlotAndPlate() {
         ParkingSlot free = new ParkingSlot(SlotType.REGULAR);
-        when(repo.findByBookedFalse()).thenReturn(List.of(free));
+        when(repo.findFirstByTypeAndBookedFalse(free.getType())).thenReturn(Optional.of(free));
         ParkingServiceImpl service = new ParkingServiceImpl(repo, sessionRepo);
 
         service.park("AREG-1");
