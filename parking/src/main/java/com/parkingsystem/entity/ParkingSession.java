@@ -20,8 +20,9 @@ public class ParkingSession {
     @Column(name = "session_id")
     private UUID sessionId;
 
-    @Column(name = "slot_id", nullable = false)
-    private UUID slotId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "slot_id", nullable = false)
+    private ParkingSlot slot;
 
     @Column(name = "number_plate", nullable = false)
     private String numberPlate;
@@ -36,9 +37,9 @@ public class ParkingSession {
 
     protected ParkingSession() {}
 
-    public ParkingSession(UUID slotId, String numberPlate) {
+    public ParkingSession(ParkingSlot slot, String numberPlate) {
         this.sessionId   = UUID.randomUUID();
-        this.slotId      = Objects.requireNonNull(slotId);
+        this.slot        = Objects.requireNonNull(slot);
         this.numberPlate = Objects.requireNonNull(numberPlate);
         this.parkedAt    = Instant.now().toString();
         this.active      = true;
@@ -50,14 +51,17 @@ public class ParkingSession {
         this.active = false;
     }
 
+    public UUID getSlotId() {
+        return slot != null ? slot.getSlotID() : null;
+    }
 
     @Override
     public String toString() {
         if (active) {
             return String.format("ParkingSession{id=%s, slot=%s, plate='%s', ACTIVE, since=%s}",
-                    sessionId, slotId, numberPlate, parkedAt);
+                    sessionId, getSlotId(), numberPlate, parkedAt);
         }
         return String.format("ParkingSession{id=%s, slot=%s, plate='%s', CLOSED, %s -> %s}",
-                sessionId, slotId, numberPlate, parkedAt, releasedAt);
+                sessionId, getSlotId(), numberPlate, parkedAt, releasedAt);
     }
 }
