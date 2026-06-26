@@ -62,7 +62,7 @@ class ParkingServiceImplTest {
     @Test
     void parkAssignsFreeSlot() {
         ParkingSlot free = new ParkingSlot(SlotType.REGULAR);
-        when(repo.findByBookedFalse()).thenReturn(List.of(free));
+        when(repo.findFirstByTypeAndBookedFalse(SlotType.REGULAR)).thenReturn(Optional.of(free));
         // plate not yet parked → no duplicate
         when(repo.findByNumberPlate("AREG-1")).thenReturn(Optional.empty());
 
@@ -79,7 +79,7 @@ class ParkingServiceImplTest {
     void parkSelectsMatchingType() {
         ParkingSlot regular  = new ParkingSlot(SlotType.REGULAR);
         ParkingSlot electric = new ParkingSlot(SlotType.ELECTRIC);
-        when(repo.findByBookedFalse()).thenReturn(List.of(regular, electric));
+        when(repo.findFirstByTypeAndBookedFalse(SlotType.ELECTRIC)).thenReturn(Optional.of(electric));
         when(repo.findByNumberPlate("AREG-1")).thenReturn(Optional.empty());
 
         Optional<ParkingSlot> parked = service.park("AREG-1", SlotType.ELECTRIC);
@@ -92,7 +92,7 @@ class ParkingServiceImplTest {
 
     @Test
     void parkReturnsEmptyWhenNoFreeSlotOfType() {
-        when(repo.findByBookedFalse()).thenReturn(List.of());
+        when(repo.findFirstByTypeAndBookedFalse(any(SlotType.class))).thenReturn(Optional.empty());
 
         assertTrue(service.park("AREG-1").isEmpty());
         verify(repo, never()).save(any());
@@ -104,7 +104,7 @@ class ParkingServiceImplTest {
         ParkingSlot free   = new ParkingSlot(SlotType.REGULAR);
         ParkingSlot booked = new ParkingSlot(SlotType.REGULAR);
         booked.book("DUP-1");
-        when(repo.findByBookedFalse()).thenReturn(List.of(free));
+        when(repo.findFirstByTypeAndBookedFalse(SlotType.REGULAR)).thenReturn(Optional.of(free));
         // plate is already in an active slot → duplicate guard triggers
         when(repo.findByNumberPlate("DUP-1")).thenReturn(Optional.of(booked));
 
