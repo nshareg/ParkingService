@@ -26,4 +26,7 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
 
     /** The single currently-open session for a plate, if it is parked right now. */
     Optional<ParkingSession> findByActiveTrueAndNumberPlate(String numberPlate);
+
+    @Query("SELECT ps FROM ParkingSession ps JOIN FETCH ps.slot")
+    List<ParkingSession> findAllWithSlot();
 }

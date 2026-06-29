@@ -43,6 +43,8 @@ public class ParkingSession {
         this.numberPlate = Objects.requireNonNull(numberPlate);
         this.parkedAt    = Instant.now().toString();
         this.active      = true;
+
+        slot.addSession(this);
     }
 
     public void close() {
@@ -63,5 +65,8 @@ public class ParkingSession {
         }
         return String.format("ParkingSession{id=%s, slot=%s, plate='%s', CLOSED, %s -> %s}",
                 sessionId, getSlotId(), numberPlate, parkedAt, releasedAt);
+    }
+    void assignSlot(ParkingSlot slot) {
+        this.slot = slot;
     }
 }

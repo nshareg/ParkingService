@@ -151,6 +151,6 @@ public class ParkingServiceImpl implements ParkingService {
     @Override
     @Transactional(readOnly = true)
     public List<ParkingSession> allSessions() {
-        return sessionRepository.findAll();
+        return sessionRepository.findAllWithSlot();
     }
 }
