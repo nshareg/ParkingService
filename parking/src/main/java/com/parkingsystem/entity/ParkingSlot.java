@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import com.parkingsystem.helpers.SlotType;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -29,6 +31,8 @@ public class ParkingSlot {
     @Column(name = "number_plate")
     private String numberPlate;
 
+    @OneToMany(mappedBy = "slot", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ParkingSession> sessions = new ArrayList<>();
 
     public ParkingSlot(){}
 
@@ -85,5 +89,15 @@ public class ParkingSlot {
     @Override
     public int hashCode() {
         return getClass().hashCode();
+    }
+
+    public void addSession(ParkingSession session) {
+        if(session == null || this.sessions.contains(session)){
+            return;
+        }
+        sessions.add(session);
+        if(session.getSlot() != this){
+            session.assignSlot(this);
+        }
     }
 }
