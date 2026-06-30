@@ -6,6 +6,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -29,7 +30,7 @@ public interface ParkingRepository extends JpaRepository<ParkingSlot, UUID> {
 
     /** All slots of the given {@link SlotType}. */
     @Query("SELECT DISTINCT p FROM ParkingSlot p LEFT JOIN FETCH p.sessions WHERE p.type = :type")
-    List<ParkingSlot> findByType(SlotType type);
+    List<ParkingSlot> findByType(@Param("type") SlotType type);
 
     /** The slot currently holding the given number plate, if any. */
     Optional<ParkingSlot> findByNumberPlate(String numberPlate);

@@ -68,8 +68,8 @@ public class ParkingServiceImpl implements ParkingService {
         }
         ParkingSlot slot = free.get();
         slot.book(numberPlate);
+        new ParkingSession(slot, numberPlate);
         repository.save(slot);
-        sessionRepository.save(new ParkingSession(slot, numberPlate));
         return Optional.of(slot);
     }
 
