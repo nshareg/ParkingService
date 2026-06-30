@@ -63,7 +63,6 @@ class ParkingServiceImplTest {
     void parkAssignsFreeSlot() {
         ParkingSlot free = new ParkingSlot(SlotType.REGULAR);
         when(repo.findFirstByTypeAndBookedFalse(SlotType.REGULAR)).thenReturn(Optional.of(free));
-        // plate not yet parked → no duplicate
         when(repo.findByNumberPlate("AREG-1")).thenReturn(Optional.empty());
 
         Optional<ParkingSlot> parked = service.park("AREG-1");
@@ -71,8 +70,14 @@ class ParkingServiceImplTest {
         assertTrue(parked.isPresent());
         assertTrue(parked.get().isBooked());
         assertEquals("AREG-1", parked.get().getNumberPlate());
+
         verify(repo).save(free);
-        verify(sessionRepo).save(any(ParkingSession.class));
+
+        assertEquals(1, parked.get().getSessions().size(), "Session must be cascaded onto the slot");
+        ParkingSession activeSession = parked.get().getSessions().get(0);
+        assertEquals("AREG-1", activeSession.getNumberPlate());
+        assertTrue(activeSession.isActive());
+
     }
 
     @Test

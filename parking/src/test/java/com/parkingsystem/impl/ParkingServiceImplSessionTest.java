@@ -34,9 +34,14 @@ class ParkingServiceImplSessionTest {
 
         service.park("AREG-1");
 
-        ArgumentCaptor<ParkingSession> captor = ArgumentCaptor.forClass(ParkingSession.class);
-        verify(sessionRepo).save(captor.capture());
-        ParkingSession opened = captor.getValue();
+        ArgumentCaptor<ParkingSlot> captor = ArgumentCaptor.forClass(ParkingSlot.class);
+        verify(repo).save(captor.capture());
+
+        ParkingSlot savedSlot = captor.getValue();
+
+        assertEquals(1, savedSlot.getSessions().size(), "Session should be cascaded onto the slot");
+        ParkingSession opened = savedSlot.getSessions().get(0);
+
         assertEquals(free.getSlotID(), opened.getSlotId());
         assertEquals("AREG-1", opened.getNumberPlate());
         assertTrue(opened.isActive());
@@ -70,12 +75,12 @@ class ParkingServiceImplSessionTest {
     @Test
     void historyMethodsDelegateToSessionRepository() {
         ParkingSlot slot = new ParkingSlot(SlotType.REGULAR);
-
         ParkingSession s = new ParkingSession(slot, "AREG-1");
 
         when(sessionRepo.findBySlotId(slot.getSlotID())).thenReturn(List.of(s));
         when(sessionRepo.findByNumberPlate("AREG-1")).thenReturn(List.of(s));
-        when(sessionRepo.findAll()).thenReturn(List.of(s));
+
+        when(sessionRepo.findAllWithSlot()).thenReturn(List.of(s));
 
         ParkingServiceImpl service = new ParkingServiceImpl(repo, sessionRepo);
 

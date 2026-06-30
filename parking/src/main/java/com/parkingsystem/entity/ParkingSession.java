@@ -15,7 +15,7 @@ import java.util.UUID;
 @Table(name = "parking_sessions")
 @Getter
 public class ParkingSession {
-
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Id
     @Column(name = "session_id")
     private UUID sessionId;
@@ -38,7 +38,6 @@ public class ParkingSession {
     protected ParkingSession() {}
 
     public ParkingSession(ParkingSlot slot, String numberPlate) {
-        this.sessionId   = UUID.randomUUID();
         this.slot        = Objects.requireNonNull(slot);
         this.numberPlate = Objects.requireNonNull(numberPlate);
         this.parkedAt    = Instant.now().toString();
