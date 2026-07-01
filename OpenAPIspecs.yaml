@@ -1,0 +1,370 @@
+openapi: 3.0.0
+info:
+  version: '1.0'
+  title: Parking Service API
+  description: ''
+
+paths:
+  /ParkingSlots:
+    summary: Core operations for parking slots
+    get:
+      summary: Retrieve parking slots (All, Free, or Booked)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter slots by booking status
+          schema:
+            type: string
+            enum: [all, free, booked]
+        - name: type
+          in: query
+          required: false
+          description: Filter slots by type
+          schema:
+            $ref: '#/components/schemas/SlotType'
+      responses:
+        '200':
+          description: A successful list of parking slots.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParkingSlot'
+        default:
+          description: Unexpected operational or database error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred handling your request."
+
+    post:
+      summary: Create a new parking slot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+              properties:
+                type:
+                  $ref: '#/components/schemas/SlotType'
+      responses:
+        '201':
+          description: Parking slot created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkingSlot'
+        default:
+          description: Unexpected operational or database error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred handling your request."
+
+  /ParkingSlots/{id}:
+    summary: Management of a specific parking slot
+    delete:
+      summary: Remove a parking slot by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Parking slot successfully deleted. Returns the deleted object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkingSlot'
+        '404':
+          description: Parking slot not found.
+        default:
+          description: Unexpected operational or database error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred handling your request."
+
+  /ParkingSlots/counts:
+    get:
+      summary: Get counts for parking slots
+      responses:
+        '200':
+          description: Count was successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    example: 100
+                  free:
+                    type: integer
+                    example: 75
+                  booked:
+                    type: integer
+                    example: 25
+        default:
+          description: Unexpected operational or database error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred handling your request."
+
+  /ParkingSlots/by-plate/{numberPlate}:
+    get:
+      summary: Find a parking slot currently holding a specific license plate
+      parameters:
+        - name: numberPlate
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "AREG-1"
+      responses:
+        '200':
+          description: Found the slot associated with this plate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkingSlot'
+        '404':
+          description: No active slot found for this plate string.
+        default:
+          description: Unexpected operational or database error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred handling your request."
+
+  /ParkingOperations/park:
+    post:
+      summary: Park a vehicle into an available slot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - numberPlate
+              properties:
+                numberPlate:
+                  type: string
+                  example: "AREG-1"
+                slotType:
+                  $ref: '#/components/schemas/SlotType'
+      responses:
+        '200':
+          description: Vehicle parked successfully. Returns the assigned slot details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkingSlot'
+        '400':
+          description: Parking failed. Plate is already registered or no slots of this type are free.
+        default:
+          description: Unexpected operational or database error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred handling your request."
+
+  /ParkingOperations/release:
+    post:
+      summary: Release a vehicle from its parking slot and close its active session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - numberPlate
+              properties:
+                numberPlate:
+                  type: string
+                  example: "AREG-1"
+      responses:
+        '200':
+          description: Vehicle released successfully. Returns the freed slot details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkingSlot'
+        '404':
+          description: Vehicle with this number plate was not found in any booked slot.
+        default:
+          description: Unexpected operational or database error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred handling your request."
+
+  /ParkingSessions:
+    summary: General operation logs and history
+    get:
+      summary: Get all parking sessions with their slots
+      responses:
+        '200':
+          description: Global session list retrieved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParkingSession'
+        default:
+          description: Unexpected operational or database error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred handling your request."
+
+  /ParkingSessions/history/by-slot/{slotId}:
+    get:
+      summary: Get history records for a specific slot ID
+      parameters:
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Historical records retrieved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParkingSession'
+        default:
+          description: Unexpected operational or database error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred handling your request."
+
+  /ParkingSessions/history/by-plate/{numberPlate}:
+    get:
+      summary: Get history records for a specific license plate
+      parameters:
+        - name: numberPlate
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "AREG-1"
+      responses:
+        '200':
+          description: Historical records retrieved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParkingSession'
+        default:
+          description: Unexpected operational or database error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred handling your request."
+
+components:
+  schemas:
+    SlotType:
+      type: string
+      enum: [REGULAR, DISABLED, ELECTRIC]
+
+    ParkingSlot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "aea8b46a-ad09-4bbf-b34d-6bbf4efe2fa"
+        type:
+          $ref: '#/components/schemas/SlotType'
+        booked:
+          type: boolean
+          example: false
+        numberPlate:
+          type: string
+          nullable: true
+          example: "AREG-1"
+
+    ParkingSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "7cc8b46a-ad09-4bbf-b34d-111f4efe2f4"
+        slot:
+          $ref: '#/components/schemas/ParkingSlot'
+        numberPlate:
+          type: string
+          example: "AREG-1"
+        active:
+          type: boolean
+          example: true
+        startTime:
+          type: string
+          format: date-time
+          example: "2026-07-01T12:00:00Z"
+        endTime:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-07-01T14:30:00Z"
